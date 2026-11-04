@@ -90,9 +90,10 @@ def banner():
             draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=fill)
         return layer
 
-    # Thin soft shadow around each dot only, so the dots separate from the
-    # grid lines without darkening a whole area behind the title.
-    shadow = circles(r * 1.5, 150).filter(ImageFilter.GaussianBlur(3 * S))
+    # Shadow that follows the letter shapes: dot circles just large enough to
+    # merge into continuous strokes, then blurred so it fades evenly within a
+    # few pixels. Separates the dots from the grid without a dark area.
+    shadow = circles(pitch * 0.62, 170).filter(ImageFilter.GaussianBlur(4 * S))
     img = Image.composite(Image.new("L", img.size, 0), img, shadow)
     img = Image.composite(Image.new("L", img.size, 255), img, circles(r, 255)).convert("RGB")
     img.resize((W, H), Image.LANCZOS).save(ASSETS / "banner.jpg", quality=92)
