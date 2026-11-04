@@ -1,0 +1,57 @@
+# Updates everything generated in this repo and commits the result:
+#   build_assets.py  banner, headings, icon tiles, icon rows in README
+#   stats.py         assets/stats.svg (GitHub API)
+#   releases.py      release cards + releases block in README (GitHub API)
+# One workflow so two jobs never push at the same time.
+#
+# Runs daily (stats and releases change without a commit here), when started
+# manually (Actions tab -> "Update profile" -> "Run workflow") and when
+# settings.txt, the scripts or the source images change on main.
+# Needs "Read and write permissions" for workflows (Settings -> Actions ->
+# General) so the job can push.
+name: Update profile
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # daily, 03:17 UTC
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - settings.txt
+      - scripts/**
+      - assets/src/**
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build assets
+        run: |
+          pip install pillow
+          python scripts/build_assets.py
+
+      # The built-in token is enough: it only reads public profile data.
+      - name: Stats and releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_USER: ${{ github.repository_owner }}
+        run: |
+          python scripts/stats.py
+          python scripts/releases.py
+
+      # Commits made with GITHUB_TOKEN do not trigger workflows, so no loop.
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A assets README.md
+          git diff --cached --quiet || (git commit -m "Update profile" && git push)

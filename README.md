@@ -45,6 +45,12 @@ Short description of what it does.
 `Python` `TypeScript`
 -->
 
+<!-- releases -->
+<img src="assets/headings/releases.svg" alt="Releases" width="100%" />
+
+<img src="assets/releases/none.svg" alt="No releases yet" width="49%" />
+<!-- /releases -->
+
 <img src="assets/headings/stats.svg" alt="Stats" width="100%" />
 
 <img src="assets/stats.svg" alt="GitHub stats" width="100%" />

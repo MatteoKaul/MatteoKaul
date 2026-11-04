@@ -27,3 +27,13 @@ icon_size = 100
 #   arduino, neovim, vim, latex, android, godot, unity
 languages = c, javascript, typescript, java, python
 systems = macos, cachyos, windows, ubuntu, raspberrypi, truenas, docker
+
+# Release cards (updated daily from GitHub). Each card links to the release.
+#   off    = no releases section
+#   latest = one card: the newest release across all public repos
+#   each   = one card per public repo with a release (newest first)
+#   list   = one card per repo named in releases_repos, in that order
+# Shows "NO RELEASES YET" while none of your public repos has a release.
+releases = each
+releases_repos =
+releases_limit = 6

@@ -49,6 +49,9 @@ SMALL = {k: v.split(",") for k, v in {
     ".": "00000,00000,00000,00000,00000,01100,01100",
     "%": "11001,11010,00010,00100,01000,01011,10011",
     "&": "01100,10010,10100,01000,10101,10010,01101",
+    "_": "00000,00000,00000,00000,00000,00000,11111",
+    "/": "00001,00010,00010,00100,01000,01000,10000",
+    ":": "00000,01100,01100,00000,01100,01100,00000",
 }.items()}
 
 # Larger 7x9 font for the banner title (finer grid = more legible at size).
@@ -115,3 +118,9 @@ def svg_text(text, x, y, pitch, r, fill, anchor="start"):
         x -= w + 2 * r
     circles = "".join(f'<circle cx="{x + px + r:.1f}" cy="{y + py + r:.1f}" r="{r}"/>' for px, py in points)
     return f'<g fill="{fill}">{circles}</g>', w + 2 * r, h + 2 * r
+
+
+def svg_doc(width, height, body):
+    """Wrap SVG markup in a standalone <svg> document of the given size."""
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+            f'viewBox="0 0 {width} {height}">{body}</svg>')

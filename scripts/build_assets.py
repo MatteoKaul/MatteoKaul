@@ -15,24 +15,22 @@ Icons come from scripts/icons.json: key -> label, group and the logo as SVG
 markup in a 24x24 box (mostly paths from the Simple Icons project; Windows,
 C# and SQL are hand-drawn). To add an icon, add an entry there.
 
-Only needed when changing the design. assets/stats.svg is made by stats.py.
+Data driven parts (stats card, release cards) are made by stats.py and
+releases.py, which need the GitHub API.
 """
 import argparse
 import json
-import re
 from pathlib import Path
 
-from dotmatrix import LARGE, layout, svg_text
-
-ROOT = Path(__file__).resolve().parent.parent
-ASSETS = ROOT / "assets"
-SETTINGS = ROOT / "settings.txt"
+from common import ASSETS, read_settings, replace_readme_block, split_list
+from dotmatrix import LARGE, layout, svg_doc, svg_text
 
 HEADINGS = {
     "about": "ABOUT",
     "languages": "LANGUAGES",
     "systems": "SYSTEMS & TOOLS",
     "projects": "PROJECTS",
+    "releases": "RELEASES",
     "stats": "STATS",
 }
 
@@ -43,27 +41,11 @@ ICONS = json.loads((Path(__file__).parent / "icons.json").read_text())
 ICON_SECTIONS = ("languages", "systems")
 
 
-def read_settings(path=SETTINGS):
-    """Parse "key = value" lines; blank lines and "#" comments are ignored."""
-    settings = {}
-    for line in path.read_text().splitlines():
-        line = line.split("#", 1)[0].strip()
-        if "=" in line:
-            key, value = line.split("=", 1)
-            settings[key.strip()] = value.strip()
-    return settings
-
-
-def svg(width, height, body):
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
-            f'viewBox="0 0 {width} {height}">{body}</svg>')
-
-
 def heading(label):
     """880px wide black bar, text left-aligned with 24px padding."""
     text, _, h = svg_text(label, 24, 16, pitch=5.6, r=2.1, fill="#fff")
     width, height = 880, int(h + 32)
-    return svg(width, height, f'<rect width="{width}" height="{height}" rx="10" fill="#000"/>{text}')
+    return svg_doc(width, height, f'<rect width="{width}" height="{height}" rx="10" fill="#000"/>{text}')
 
 
 def tile(logo, label):
@@ -75,7 +57,7 @@ def tile(logo, label):
     r = round(pitch * 0.4, 2)
     _, w, h = layout(label, pitch)
     text, _, _ = svg_text(label, (width - w - 2 * r) / 2, 112 - (h + 2 * r) / 2, pitch, r, "#e0e0e0")
-    return svg(width, height,
+    return svg_doc(width, height,
                f'<rect x=".5" y=".5" width="{width - 1}" height="{height - 1}" rx="12" fill="#000" stroke="#2a2a2a"/>'
                f'<g transform="translate({(width - 48) / 2} 22) scale(2)" fill="#fff">{logo}</g>{text}')
 
@@ -126,7 +108,7 @@ def banner(title, shadow_pct=60):
 
 def icon_keys(settings, section):
     """Comma separated icon keys of one settings entry, validated."""
-    keys = [k.strip().lower() for k in settings.get(section, "").split(",") if k.strip()]
+    keys = [k.lower() for k in split_list(settings.get(section, ""))]
     unknown = [k for k in keys if k not in ICONS]
     if unknown:
         raise SystemExit(f"{section}: unknown icons {unknown}; see --list")
@@ -134,18 +116,11 @@ def icon_keys(settings, section):
 
 
 def update_readme(sections, height):
-    """Rewrite the icon rows between the markers in README.md."""
-    readme = ROOT / "README.md"
-    text = readme.read_text()
+    """Rewrite the icon rows between the <!-- icons:NAME --> markers."""
     for name, keys in sections.items():
         imgs = "\n".join(f'  <img src="assets/icons/{k}.svg" alt="{ICONS[k]["label"]}" height="{height}" />'
                          for k in keys)
-        block = f"<!-- icons:{name} -->\n<p>\n{imgs}\n</p>\n<!-- /icons:{name} -->"
-        pattern = rf"<!-- icons:{name} -->.*?<!-- /icons:{name} -->"
-        if not re.search(pattern, text, flags=re.S):
-            raise SystemExit(f"README.md: markers for '{name}' not found")
-        text = re.sub(pattern, lambda _: block, text, flags=re.S)
-    readme.write_text(text)
+        replace_readme_block(f"icons:{name}", f"<p>\n{imgs}\n</p>" if keys else "")
 
 
 def list_icons():

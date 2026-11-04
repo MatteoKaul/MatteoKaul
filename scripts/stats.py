@@ -7,16 +7,14 @@ Run daily by .github/workflows/stats.yml. Standard library only.
 Counts public, non-fork repositories owned by the user; commits are the
 user's commit contributions of the last 12 months.
 """
-import json
 import os
 import sys
-import urllib.request
 from collections import Counter
-from pathlib import Path
 
-from dotmatrix import svg_text
+from common import ASSETS, graphql
+from dotmatrix import svg_doc, svg_text
 
-OUT = Path(__file__).resolve().parent.parent / "assets" / "stats.svg"
+OUT = ASSETS / "stats.svg"
 W = 880  # same width as the section headings
 
 QUERY = """
@@ -39,17 +37,7 @@ query($login: String!) {
 
 def fetch(login, token):
     """Query the GraphQL API and reduce the answer to the numbers we draw."""
-    req = urllib.request.Request(
-        "https://api.github.com/graphql",
-        data=json.dumps({"query": QUERY, "variables": {"login": login}}).encode(),
-        headers={"Authorization": f"bearer {token}", "User-Agent": "profile-stats"},
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        payload = json.load(resp)
-    if "errors" in payload:
-        sys.exit(f"GraphQL error: {payload['errors']}")
-
-    user = payload["data"]["user"]
+    user = graphql(QUERY, {"login": login}, token)["user"]
     repos = user["repositories"]["nodes"]
 
     # Sum code size per language over all repos, keep the top 5 as percentages.
@@ -109,9 +97,7 @@ def render(d):
         y += 30
 
     height = y + 4
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{height}" '
-            f'viewBox="0 0 {W} {height}"><rect width="{W}" height="{height}" rx="10" fill="#000"/>'
-            + "".join(parts) + "</svg>")
+    return svg_doc(W, height, f'<rect width="{W}" height="{height}" rx="10" fill="#000"/>' + "".join(parts))
 
 
 SAMPLE = {"repos": 12, "stars": 34, "commits": 12840, "followers": 5,
