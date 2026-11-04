@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.jpg" alt="Matrexx" width="100%" />
+  <img src="assets/banner.jpg" alt="Banner" width="100%" />
 </p>
 
 <img src="assets/headings/about.svg" alt="About" width="100%" />

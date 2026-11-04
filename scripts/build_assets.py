@@ -2,9 +2,10 @@
 
     pip install pillow            # only needed for the banner
     python scripts/build_assets.py
+    python scripts/build_assets.py --title "LUMI CODE"   # override settings.txt
 
 Writes:
-    assets/banner.jpg           title "MATREXX" on assets/src/background.webp
+    assets/banner.jpg           banner_title from settings.txt on assets/src/background.webp
     assets/headings/<name>.svg  black section bars with dot-matrix text
     assets/icons/<name>.svg     black tiles: white logo + dot-matrix label
 
@@ -14,6 +15,7 @@ path there and an entry to TILES below.
 
 Only needed when changing the design. assets/stats.svg is made by stats.py.
 """
+import argparse
 import json
 from pathlib import Path
 
@@ -21,6 +23,7 @@ from dotmatrix import LARGE, layout, svg_text
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / "assets"
+SETTINGS = ROOT / "settings.txt"
 
 HEADINGS = {
     "about": "ABOUT",
@@ -38,6 +41,17 @@ TILES = [
     ("ubuntu", "UBUNTU"), ("raspberrypi", "PI OS"), ("truenas", "TRUENAS"),
     ("docker", "DOCKER"), ("git", "GIT"), ("cmake", "CMAKE"),
 ]
+
+
+def read_settings(path=SETTINGS):
+    """Parse "key = value" lines; blank lines and "#" comments are ignored."""
+    settings = {}
+    for line in path.read_text().splitlines():
+        line = line.split("#", 1)[0].strip()
+        if "=" in line:
+            key, value = line.split("=", 1)
+            settings[key.strip()] = value.strip()
+    return settings
 
 
 def svg(width, height, body):
@@ -66,8 +80,10 @@ def tile(path, label):
                f'<g transform="translate({(width - 48) / 2} 22) scale(2)" fill="#fff"><path d="{path}"/></g>{text}')
 
 
-def banner():
-    """1600x420 JPEG. Drawn at 2x and scaled down for smooth dots."""
+def banner(title, shadow_pct=40):
+    """1600x420 JPEG with `title` in the large dot font.
+    shadow_pct: darkness of the shadow around the letters, 0 = off, 100 = black.
+    Drawn at 2x and scaled down for smooth dots."""
     from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 
     W, H, S = 1600, 420, 2
@@ -78,8 +94,17 @@ def banner():
     img = photo.crop((0, top, pw, top + int(pw * H / W))).resize((W * S, H * S), Image.LANCZOS)
     img = ImageEnhance.Contrast(img).enhance(1.15).point(lambda p: int(p * 0.42))  # darken
 
-    pitch, r = 15 * S, 5.9 * S
-    points, w, h = layout("MATREXX", pitch, font=LARGE, gap=2, shear=0.16)
+    title = title.upper()
+    unknown = sorted(set(title) - set(LARGE) - {" "})
+    if unknown:
+        raise SystemExit(f"banner_title: unsupported characters {unknown} (use A-Z and spaces)")
+
+    # Dot pitch 15px; titles wider than 85% of the banner get a smaller pitch.
+    style = dict(font=LARGE, gap=2, shear=0.16)
+    _, unit_w, _ = layout(title, 1, **style)
+    pitch = min(15, W * 0.85 / unit_w) * S
+    r = pitch * 0.393  # dot radius relative to spacing, as in the original
+    points, w, h = layout(title, pitch, **style)
     x0, y0 = (W * S - w) / 2, (H * S - h) / 2
     dots = [(x0 + px, y0 + py) for px, py in points]
 
@@ -93,13 +118,20 @@ def banner():
     # Shadow that follows the letter shapes: dot circles just large enough to
     # merge into continuous strokes, then blurred so it fades evenly within a
     # few pixels. Separates the dots from the grid without a dark area.
-    shadow = circles(pitch * 0.62, 170).filter(ImageFilter.GaussianBlur(4 * S))
+    shadow = circles(pitch * 0.58, int(2.55 * shadow_pct)).filter(ImageFilter.GaussianBlur(3 * S))
     img = Image.composite(Image.new("L", img.size, 0), img, shadow)
     img = Image.composite(Image.new("L", img.size, 255), img, circles(r, 255)).convert("RGB")
     img.resize((W, H), Image.LANCZOS).save(ASSETS / "banner.jpg", quality=92)
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--title", help="banner text (default: banner_title in settings.txt)")
+    args = parser.parse_args()
+    settings = read_settings()
+    title = args.title or settings.get("banner_title", "MATREXX")
+    shadow_pct = int(settings.get("banner_shadow", 40))
+
     (ASSETS / "headings").mkdir(parents=True, exist_ok=True)
     (ASSETS / "icons").mkdir(parents=True, exist_ok=True)
     for name, label in HEADINGS.items():
@@ -109,8 +141,8 @@ def main():
     for name, label in TILES:
         (ASSETS / "icons" / f"{name}.svg").write_text(tile(paths[name], label))
 
-    banner()
-    print("assets rebuilt")
+    banner(title, shadow_pct)
+    print(f"assets rebuilt, banner: {title}")
 
 
 if __name__ == "__main__":
