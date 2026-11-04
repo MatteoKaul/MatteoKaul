@@ -42,10 +42,3 @@ Template for a project entry. Copy, fill in and uncomment:
 Short description of what it does.
 `Python` `TypeScript`
 -->
-
-<img src="assets/headings/stats.svg" alt="Stats" width="100%" />
-
-<p>
-  <img height="150" src="https://github-readme-stats.vercel.app/api?username=MatteoKaul&show_icons=true&hide_border=true&bg_color=000000&title_color=ffffff&text_color=bbbbbb&icon_color=ffffff" alt="GitHub stats" />
-  <img height="150" src="https://github-readme-stats.vercel.app/api/top-langs/?username=MatteoKaul&layout=compact&hide_border=true&bg_color=000000&title_color=ffffff&text_color=bbbbbb" alt="Top languages" />
-</p>
