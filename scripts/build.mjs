@@ -6,7 +6,7 @@
 //                                             options and their explanations
 //
 // No dependencies besides Node 18+. The drawing itself is in render.mjs.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SAMPLE_DATA, imageSize, parseSettings, render, resolve, writeSettings } from "./render.mjs";
@@ -35,7 +35,15 @@ for (const m of cfg.layout) {
   images[m.opt.image] = { ...imageSize(bytes), base64: bytes.toString("base64") };
 }
 
-const { files, readme } = render(cfg, data, { font, catalog, images });
+// GitHub avatars for people cards, downloaded by fetch.mjs.
+const avatars = {};
+const avatarDir = join(ROOT, "data/avatars");
+for (const file of existsSync(avatarDir) ? readdirSync(avatarDir) : []) {
+  const bytes = readFileSync(join(avatarDir, file));
+  avatars[file.replace(/\.\w+$/, "")] = { mime: imageSize(bytes).mime, base64: bytes.toString("base64") };
+}
+
+const { files, readme } = render(cfg, data, { font, catalog, images, avatars });
 
 // assets/gen only holds generated files, so it is rebuilt from scratch.
 rmSync(join(ROOT, "assets/gen"), { recursive: true, force: true });

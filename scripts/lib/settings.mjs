@@ -67,6 +67,8 @@ export const TYPES = {
       { key: "style", label: "Layout", type: "select", options: ["sections", "compact"], default: "sections",
         help: "sections = a full heading per category | compact = one heading, small category labels" },
       { key: "title", label: "Heading (compact)", type: "text", default: "SKILLS & TOOLS", help: "Only used with style = compact" },
+      { key: "tile", label: "Tile style", type: "select", options: ["below", "none", "badge"], default: "below",
+        help: "below = logo with the name underneath | none = logo only | badge = logo left, name right" },
       { key: "size", label: "Tile size", type: "number", ...SIZE, default: 100,
         help: "Display height in px (columns = 1). Reference: 120 = large | 100 = medium (default) | 80 = small" },
       { key: "columns", label: "Categories side by side", type: "number", min: 1, max: 4, step: 1, default: 1,
@@ -131,8 +133,22 @@ export const TYPES = {
     fields: [
       { key: "title", label: "Heading", type: "text", default: "CONTACT" },
       { key: "items", label: "Links", type: "links", default: "",
-        help: "icon=url pairs, e.g. twitch=https://www.twitch.tv/name, email=mailto:me@example.com" },
-      { key: "size", label: "Tile size", type: "number", ...SIZE, default: 72 },
+        help: "icon=url pairs, optionally with a label: icon=url|LABEL. The same icon may appear more than once.\n" +
+          "E.g. youtube=https://www.youtube.com/@name|MAIN, youtube=https://www.youtube.com/@name2|CLIPS, website=https://example.com|BLOG" },
+      { key: "tile", label: "Tile style", type: "select", options: ["below", "none", "badge"], default: "below",
+        help: "below = logo with the name underneath | none = logo only | badge = logo left, name right" },
+      { key: "size", label: "Tile size", type: "number", ...SIZE, default: 72,
+        help: "Display height in px of a below-style tile; the other styles scale with it" },
+    ],
+  },
+  people: {
+    label: "People", help: "Cards for people or companies you work with, or your employer",
+    fields: [
+      { key: "title", label: "Heading", type: "text", default: "WORKING WITH" },
+      { key: "items", label: "Entries", type: "people", default: "",
+        help: "Entries separated by commas, each: Name | Role | URL | Image.\n" +
+          "Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json, or empty for initials.\n" +
+          "E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website" },
     ],
   },
   divider: { label: "Divider", help: "A dotted line", fields: [] },
@@ -245,6 +261,17 @@ function convert(field, value, name) {
 }
 
 export const splitList = (value) => String(value).split(",").map((s) => s.trim()).filter(Boolean);
+
+/** "Name | Role | URL | Image, ..." -> [{name, role, url, image}] */
+export const splitPeople = (value) => splitList(value).map((entry) => {
+  const [name = "", role = "", url = "", image = ""] = entry.split("|").map((s) => s.trim());
+  return { name, role, url, image };
+});
+
+/** GitHub logins referenced as "gh:<login>" images in people modules (for fetch.mjs). */
+export const avatarLogins = (cfg) => [...new Set(cfg.modules.filter((m) => m.type === "people")
+  .flatMap((m) => splitPeople(m.opt.items)).map((e) => e.image)
+  .filter((i) => /^gh:[A-Za-z0-9-]+$/.test(i)).map((i) => i.slice(3)))];
 
 /** "a=1, b=2" -> [["a","1"], ["b","2"]] (values may contain "=", e.g. URLs) */
 export const splitPairs = (value) => splitList(value).map((p) => {

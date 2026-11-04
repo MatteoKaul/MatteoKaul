@@ -37,7 +37,7 @@ const title = (text) => h("h2", {}, dotImg(text, 1.6, "#9a9a9a"));
 const EMPTY_DATA = { followers: 0, commits: 0, pinned: [], calendar: { total: 0, weeks: [] }, repos: [] };
 const state = {
   settings: {},        // flat settings.txt content, the single source of truth
-  catalog: null, fonts: {}, images: {}, githubData: EMPTY_DATA,
+  catalog: null, fonts: {}, images: {}, avatars: {}, githubData: EMPTY_DATA,
   selected: "theme",   // "theme" or a module id
   iconFilter: "", iconCategory: "",
 };
@@ -69,10 +69,27 @@ async function image(file) {
   setImage(file, new Uint8Array(await res.arrayBuffer()));
 }
 
-function setImage(file, bytes) {
+/** GitHub avatar saved by fetch.mjs as data/avatars/<login>.png or .jpg. */
+async function avatar(login) {
+  if (login in state.avatars) return;
+  state.avatars[login] = null; // also remembers "not found"
+  for (const ext of ["png", "jpg"]) {
+    const res = await fetch(`../data/avatars/${login}.${ext}`);
+    if (!res.ok) continue;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    state.avatars[login] = { mime: R.imageSize(bytes).mime, base64: toBase64(bytes) };
+    return;
+  }
+}
+
+function toBase64(bytes) {
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  state.images[file] = { ...R.imageSize(bytes), base64: btoa(bin) };
+  return btoa(bin);
+}
+
+function setImage(file, bytes) {
+  state.images[file] = { ...R.imageSize(bytes), base64: toBase64(bytes) };
 }
 
 // ---------------------------------------------------------------- helpers --
@@ -214,6 +231,8 @@ function field(f, value, onChange, module) {
       return iconEditor(module);
     case "links":
       return linkEditor(f, value, onChange);
+    case "people":
+      return peopleEditor(f, value, onChange);
     default:
       input = h("input", { type: "text", value, oninput: (e) => onChange(e.target.value) });
   }
@@ -233,21 +252,41 @@ function imageUpload(m) {
     h("div", { class: "help" }, "Preview only: to use it, add the file to assets/src/ in the repo."));
 }
 
-/** socials: rows of [icon, url]. */
-function linkEditor(f, value, onChange) {
-  const rows = R.splitPairs(value);
-  const save = () => onChange(rows.filter(([k]) => k).map(([k, u]) => `${k}=${u}`).join(", "));
-  const keys = Object.keys(state.catalog.icons).sort((a, b) =>
-    (state.catalog.icons[b].category === "social") - (state.catalog.icons[a].category === "social") || a.localeCompare(b));
+/**
+ * Row editor used for socials and people: each row is a few text/select
+ * columns, saved back into the single-line settings format by `save`.
+ */
+function rowEditor(f, rows, columns, save, blank, addLabel) {
   const list = h("div", {});
-  const draw = () => fill(list, rows.map((row, i) => h("div", { class: "link-row" },
-    h("select", { onchange: (e) => { row[0] = e.target.value; save(); } }, keys.map((k) => h("option", { value: k, selected: k === row[0] }, k))),
-    h("input", { type: "text", value: row[1], placeholder: "https://...", oninput: (e) => { row[1] = e.target.value; save(); } }),
-    h("button", { onclick: () => { rows.splice(i, 1); save(); draw(); } }, "×"))));
+  const draw = () => fill(list, rows.map((row, i) => h("div", { class: `entry-row${columns.length > 3 ? " wide" : ""}`, style: `--cols:${columns.length}` },
+    columns.map((col, c) => col.options
+      ? h("select", { title: col.label, onchange: (e) => { row[c] = e.target.value; save(); } },
+        col.options.map((o) => h("option", { value: o, selected: o === row[c] }, o)))
+      : h("input", { type: "text", value: row[c], placeholder: col.label, title: col.label,
+        oninput: (e) => { row[c] = e.target.value; save(); } })),
+    h("button", { title: "Remove", onclick: () => { rows.splice(i, 1); save(); draw(); } }, "×"))));
   draw();
   return h("div", { class: "field" }, h("label", {}, f.label), list,
-    h("button", { onclick: () => { rows.push(["website", ""]); draw(); } }, "+ Link"),
+    h("button", { onclick: () => { rows.push([...blank]); draw(); } }, addLabel),
     h("div", { class: "help" }, f.help));
+}
+
+/** socials: icon, url and an optional label (icon=url|LABEL). */
+function linkEditor(f, value, onChange) {
+  const rows = R.splitPairs(value).map(([k, v]) => [k, ...v.split("|").map((x) => x.trim())]).map(([k, u = "", l = ""]) => [k, u, l]);
+  const save = () => onChange(rows.filter(([k]) => k).map(([k, u, l]) => `${k}=${u}${l ? `|${l}` : ""}`).join(", "));
+  const keys = Object.keys(state.catalog.icons).sort((a, b) =>
+    (state.catalog.icons[b].category === "social") - (state.catalog.icons[a].category === "social") || a.localeCompare(b));
+  return rowEditor(f, rows, [{ label: "icon", options: keys }, { label: "https://..." }, { label: "label (optional)" }],
+    save, ["website", "", ""], "+ Link");
+}
+
+/** people: name, role, url, image (gh:<login> or icon key). */
+function peopleEditor(f, value, onChange) {
+  const rows = R.splitPeople(value).map((e) => [e.name, e.role, e.url, e.image]);
+  const save = () => onChange(rows.filter(([n]) => n).map((r) => r.join(" | ")).join(", "));
+  return rowEditor(f, rows, [{ label: "Name" }, { label: "Role" }, { label: "https://..." }, { label: "gh:login or icon" }],
+    save, ["", "", "", ""], "+ Entry");
 }
 
 // ----------------------------------------------------------- icon editor --
@@ -396,9 +435,11 @@ async function renderPreview() {
   try {
     const c = R.resolve(state.settings); // throws on invalid values -> shown in the status line
     const fontData = await font(c.theme.font);
-    await Promise.all(c.layout.filter((m) => m.type === "banner").map((m) => image(m.opt.image)));
+    await Promise.all([...c.layout.filter((m) => m.type === "banner").map((m) => image(m.opt.image)),
+      ...R.avatarLogins(c).map(avatar)]);
     const data = $("#dataSource").value === "sample" ? R.SAMPLE_DATA : state.githubData;
-    const { files, readme } = R.render(c, data, { font: fontData, catalog: state.catalog, images: state.images });
+    const avatars = Object.fromEntries(Object.entries(state.avatars).filter(([, v]) => v));
+    const { files, readme } = R.render(c, data, { font: fontData, catalog: state.catalog, images: state.images, avatars });
     const html = markdown(readme.replace(/^<!--.*?-->\n*/s, ""))
       .replace(/src="(assets\/gen\/[^"]+)"/g, (_, path) => `src="${svgUrl(files[path])}"`);
     showPreview(html);

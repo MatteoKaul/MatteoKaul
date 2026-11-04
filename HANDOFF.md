@@ -15,7 +15,7 @@ Conversation language with the owner is German; everything in the repo is Englis
 
 ```
 settings.txt ──► scripts/build.mjs ──► README.md + assets/gen/*.svg
-                     ▲    uses scripts/render.mjs (all drawing, pure functions)
+                     ▲    uses scripts/render.mjs + lib/ (all drawing, pure functions)
 data/github.json ────┘    written by scripts/fetch.mjs (GitHub GraphQL API)
 editor/  ── same render.mjs in the browser: live preview, exports settings.txt
 .github/workflows/profile.yml ── daily + on change: fetch, build, commit
@@ -37,6 +37,13 @@ Done (branch `claude/clever-feynman-cj0nr1`, not merged to `main` yet):
 - Python generator replaced by a single JavaScript renderer (Node + browser)
 - One workflow (`Update profile`) for fetch + build + commit
 - Graphical editor (`editor/`) with drag & drop layout, icon picker, live preview
+- Icons in 1-4 columns (owner uses 2), optional full rows for large categories
+  and hiding of small ones; tile styles below / none / badge
+- Prepared but hidden: `links` (websites, several YouTube channels, Spotify,
+  Apple Music, itch.io, Steam, ...), `people`, `companies`, `employer`
+  (people cards with GitHub avatar, logo or initials), `activity`, `socials`, `divider`
+- Code split: scripts/lib/settings.mjs (schema, parsing, validation),
+  scripts/lib/draw.mjs (SVG), scripts/render.mjs (modules -> README)
 - Docs: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (files, settings, modules, editor, security)
 
 ## Open
@@ -49,14 +56,26 @@ Done (branch `claude/clever-feynman-cj0nr1`, not merged to `main` yet):
       Workflow permissions → Read and write*, optionally enable GitHub Pages
       (branch `main`, root) to use the editor online.
 - [ ] Optional: pin workflow actions to commit SHAs.
-- [ ] Optional ideas: more dot fonts, a "now playing"/"currently" text
-      module, light-theme variant of the default colours.
+- [ ] Avatar download (`gh:<login>` in people modules) is untested against
+      the live avatars.githubusercontent.com (blocked in the dev container).
+- [ ] Ideas proposed to the owner (not built): see "Ideas" below.
+
+## Ideas (proposed, not built)
+
+- Now / status line ("currently: building X, learning Y"), updated by hand
+- Blog / video feed: latest posts or YouTube uploads from an RSS feed
+- Twitch live indicator (needs a Twitch API token as a secret)
+- Timeline: education / jobs / milestones as a dotted vertical line
+- Pinned gists or snippets, guestbook via issues, visitor counter (self-hosted)
+- Light-mode theme via <picture> sources (prefers-color-scheme)
+- Animated SVG (blinking cursor / scrolling LED ticker in the banner)
+- Second dot font (e.g. thin 3x5 or bold 7x9 for headings)
 
 ## Done in the last session (checked)
 
 - Editor verified in Chromium: layout drag & drop, icon editor, live preview,
   invalid input handling, import/export
-- Editor design in the profile style (dot-matrix headings from render.mjs)
+- Editor design in the profile style (dot-matrix headings from lib/draw.mjs)
 - Security audit + fixes: option validation (colours, numbers, selects, file
   names, module ids, category names, link schemes), XML escaping, sandboxed
   preview iframe + CSP, XSS test with a hostile settings file

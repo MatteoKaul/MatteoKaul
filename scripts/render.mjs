@@ -10,10 +10,12 @@
 //
 // This file re-exports everything the build script and the editor need.
 import {
-  activityCard, bannerSvg, categoryRows, dividerSvg, esc, heading, painter, placeholderCard,
+  activityCard, bannerSvg, categoryRows, dividerSvg, esc, heading, painter, personCard, placeholderCard,
   projectCard, releaseCard, statsCard, tile,
 } from "./lib/draw.mjs";
-import { splitList, splitPairs } from "./lib/settings.mjs";
+import { splitList, splitPairs, splitPeople } from "./lib/settings.mjs";
+
+const LINK = /^(https?:\/\/|mailto:)/i; // allowed link targets in the README
 
 export * from "./lib/settings.mjs";
 export { imageSize, renderLabel, renderTile } from "./lib/draw.mjs";
@@ -73,7 +75,8 @@ export function iconGroups(opt, catalog) {
  * Render everything.
  *   cfg     resolve(settings)
  *   data    data/github.json (or SAMPLE_DATA)
- *   assets  {font, catalog, images: {filename: {mime, base64, width, height}}}
+ *   assets  {font, catalog, images: {filename: {mime, base64, width, height}},
+ *            avatars: {login: {mime, base64}}}
  * Returns {files: {path: svg text}, readme: markdown}; all paths are under assets/gen/.
  */
 export function render(cfg, data, assets) {
@@ -111,8 +114,13 @@ export function render(cfg, data, assets) {
             ...rows.map((r, i) => para(img(put(`${m.id}/row-${i + 1}.svg`, r.svg), r.alt, 'width="100%"')))));
           break;
         }
-        const row = (keys) => "<p>\n" + keys.map((k) =>
-          `  ${img(put(`tiles/${k}.svg`, tile(p, theme, catalog.icons[k])), catalog.icons[k].label, `height="${o.size}"`)}`).join("\n") + "\n</p>";
+        // Tiles are shared between modules, one file per icon and style; the
+        // display height scales with the style's own height (badges are lower).
+        const tileImg = (k) => {
+          const t = tile(p, theme, catalog.icons[k], o.tile);
+          return img(put(`tiles/${o.tile}/${k}.svg`, t.svg), catalog.icons[k].label, `height="${Math.round((o.size * t.h) / 132)}"`);
+        };
+        const row = (keys) => "<p>\n" + keys.map((k) => `  ${tileImg(k)}`).join("\n") + "\n</p>";
         const parts = o.style === "compact" ? [headingBlock(m, o.title)] : [];
         for (const [cat, keys] of groups) parts.push(headingBlock(m, titleOf(cat), o.style === "compact", `cat-${cat}`), row(keys));
         blocks.push(join(...parts));
@@ -145,15 +153,37 @@ export function render(cfg, data, assets) {
           para(img(put(`${m.id}/activity.svg`, activityCard(p, theme, data.calendar, o.weeks)), "Contribution activity", 'width="100%"'))));
         break;
       case "socials": {
-        const links = splitPairs(o.items);
-        const bad = links.filter(([k]) => !catalog.icons[k]).map(([k]) => k);
+        // icon=url or icon=url|LABEL; a custom label gets its own tile file
+        const links = splitPairs(o.items).map(([k, v]) => {
+          const [url, label] = v.split("|").map((x) => x.trim());
+          return { k, url, label };
+        });
+        const bad = links.filter((l) => !catalog.icons[l.k]).map((l) => l.k);
         if (bad.length) throw new Error(`${m.id}.items: unknown icon(s) ${bad.join(", ")}`);
-        const badUrl = links.filter(([, url]) => !/^(https?:\/\/|mailto:)/i.test(url)).map(([k]) => k);
+        const badUrl = links.filter((l) => !LINK.test(l.url)).map((l) => l.k);
         if (badUrl.length) throw new Error(`${m.id}.items: links must start with https://, http:// or mailto: (${badUrl.join(", ")})`);
         if (!links.length) break;
-        const tiles = links.map(([k, url]) =>
-          `  <a href="${esc(url)}">${img(put(`tiles/${k}.svg`, tile(p, theme, catalog.icons[k])), catalog.icons[k].label, `height="${o.size}"`)}</a>`);
+        const tiles = links.map(({ k, url, label }, i) => {
+          const icon = label ? { ...catalog.icons[k], label: label.toUpperCase() } : catalog.icons[k];
+          const t = tile(p, theme, icon, o.tile);
+          const file = label ? `${m.id}/link-${i + 1}.svg` : `tiles/${o.tile}/${k}.svg`;
+          return `  <a href="${esc(url)}">${img(put(file, t.svg), icon.label, `height="${Math.round((o.size * t.h) / 132)}"`)}</a>`;
+        });
         blocks.push(join(headingBlock(m, o.title), `<p>\n${tiles.join("\n")}\n</p>`));
+        break;
+      }
+      case "people": {
+        const entries = splitPeople(o.items);
+        if (!entries.length) break;
+        const cards = entries.map((e, i) => {
+          if (e.url && !LINK.test(e.url)) throw new Error(`${m.id}.items: "${e.name}" link must start with https://, http:// or mailto:`);
+          const login = e.image.startsWith("gh:") ? e.image.slice(3) : null;
+          if (e.image && !login && !catalog.icons[e.image]) throw new Error(`${m.id}.items: "${e.name}" image "${e.image}" is neither gh:<login> nor an icon`);
+          const svg = personCard(p, theme, e, login ? assets.avatars?.[login] : null, login ? null : catalog.icons[e.image]);
+          const image = img(put(`${m.id}/${i + 1}.svg`, svg), [e.name, e.role].filter(Boolean).join(", "), 'width="49%"');
+          return e.url ? `<a href="${esc(e.url)}">${image}</a>` : image;
+        });
+        blocks.push(join(headingBlock(m, o.title), `<p>\n${cards.join("\n")}\n</p>`));
         break;
       }
       case "divider":

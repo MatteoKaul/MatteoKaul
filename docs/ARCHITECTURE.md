@@ -8,7 +8,7 @@ settings.txt ─┐
 fonts/*.json ─┤
 icons.json ───┼─► scripts/build.mjs ──► README.md
 assets/src/ ──┤       │                  assets/gen/**.svg
-data/*.json ──┘       └─ scripts/render.mjs (all drawing)
+data/*.json ──┘       └─ scripts/render.mjs ─ lib/settings.mjs, lib/draw.mjs
      ▲
 scripts/fetch.mjs ◄── GitHub GraphQL API (stats, repos, releases, activity)
 
@@ -22,14 +22,16 @@ editor/ ── loads the same files + render.mjs in the browser, live preview,
 | --- | --- |
 | `settings.txt` | Everything you can change: layout, theme, module options. Commented. |
 | `README.md` | Generated profile page. |
-| `scripts/render.mjs` | The renderer: option schema, settings parser/writer, all SVG drawing. Pure functions, runs in Node and the browser. |
+| `scripts/render.mjs` | Renderer entry: picks the data for each module and assembles README.md. Pure functions, runs in Node and the browser. |
+| `scripts/lib/settings.mjs` | Option schema (`THEME_FIELDS`, `TYPES`), settings.txt parser/writer, validation. |
+| `scripts/lib/draw.mjs` | Dot-matrix text and every SVG piece (banner, tiles, cards, stats, ...). |
 | `scripts/build.mjs` | Node entry: reads the files, calls `render`, writes `README.md` and `assets/gen/`. |
-| `scripts/fetch.mjs` | Node entry: reads public GitHub data into `data/github.json`. |
+| `scripts/fetch.mjs` | Node entry: reads public GitHub data into `data/github.json` and GitHub avatars for people cards into `data/avatars/`. |
 | `scripts/icons.json` | Icon catalog: `categories` (key → heading) and `icons` (key → label, category, SVG markup of the logo in a 24×24 box, optional `scale`). |
 | `fonts/led.json` | Dot font: `small` 5×7 and `large` 7×9 glyph grids (`"1"` = dot). |
 | `assets/src/` | Source images (banner background). |
 | `assets/gen/` | Generated SVGs. Deleted and rebuilt on every build. |
-| `data/github.json` | Last fetched GitHub data (created by the workflow). |
+| `data/` | Last fetched GitHub data and avatars (created by the workflow). |
 | `editor/` | Graphical editor (static HTML/CSS/JS, no build step). |
 | `.github/workflows/profile.yml` | Daily / on-change job: fetch, build, commit. |
 | `HANDOFF.md` | Current status and open points. |
@@ -92,7 +94,7 @@ A module id that equals a type name (`banner`, `icons`, ...) or `about`
 module but keeps its options.
 
 All options with explanations are written into `settings.txt` itself; the
-source of truth is `THEME_FIELDS` and `TYPES` at the top of `render.mjs`.
+source of truth is `THEME_FIELDS` and `TYPES` in `scripts/lib/settings.mjs`.
 
 ## Modules
 
@@ -105,8 +107,36 @@ source of truth is `THEME_FIELDS` and `TYPES` at the top of `render.mjs`.
 | `releases` | Cards linking to the latest release(s) | GitHub |
 | `stats` | Repos, stars, commits (last year), followers, top languages | GitHub |
 | `activity` | Contribution calendar as a dot grid | GitHub |
-| `socials` | Link tiles (any icon + URL) | – |
+| `socials` | Link tiles (any icon + URL, optional own label) | – |
+| `people` | Cards for people, companies or an employer: image, name, role, link | GitHub avatars |
 | `divider` | Dotted line | – |
+
+Prepared but hidden (switch them on in `layout` or the editor): `activity`,
+`socials` (contact), `links` (websites, channels, music, games), `people`
+(working with), `companies`, `employer`, `divider`.
+
+### Links (`socials` type)
+
+`items = icon=url|LABEL, ...`. The label is optional and replaces the icon
+name on the tile, so the same platform can appear several times:
+
+```
+links.items = website=https://example.com|PORTFOLIO, youtube=https://www.youtube.com/@a|MAIN, youtube=https://www.youtube.com/@b|CLIPS, spotify=https://open.spotify.com/artist/...
+```
+
+Links must start with `https://`, `http://` or `mailto:`. All platform icons
+are in the `social` category of `scripts/icons.json` (YouTube, YouTube Music,
+Spotify, Apple Music, Bandcamp, SoundCloud, Twitch, Kick, Steam, itch.io,
+Epic, GOG, PlayStation, blogs, Linktree, website, email, ...).
+
+### People (`people` type)
+
+`items = Name | Role | URL | Image, ...` (no commas inside an entry). Image is
+`gh:<login>` for a GitHub avatar (downloaded by `fetch.mjs` on the next
+workflow run, shown greyscale), an icon key (e.g. a company logo like
+`github` or `website`), or empty for the initials. The same type is used for
+the `people`, `companies` and `employer` modules; add more with
+`<id>.type = people`.
 
 `projects` and `releases` disappear while they have nothing to show
 (`empty = hide`) and appear on their own with the next daily run once you have
@@ -118,7 +148,21 @@ a public repo / release.
 `icons.json`; `icons.move` overrides that per icon (`wireguard=services`),
 `icons.order` puts categories first, `icons.titles` renames headings. The
 order of icons inside a category follows `icons.items`. In the editor all of
-this is drag and drop.
+this is drag and drop. Only categories with at least one icon are shown.
+
+Layout options:
+
+- `icons.columns = 1` one category per row with large headings and tiles;
+  `2`-`4` puts that many categories side by side with small headings and
+  tiles (`icons.grid_size`). Each row of categories is drawn as one image, so
+  tiles always stay under their own heading.
+- `icons.min_toggle = on` hides categories with fewer than `icons.min_icons` icons.
+- `icons.wide_toggle = on` (with columns > 1) gives categories with more than
+  `icons.wide_above` icons a full row of their own.
+- `icons.style = compact` adds one heading (`icons.title`) above all categories.
+- `icons.tile` (also `socials.tile`): `below` = logo with the name underneath
+  (default), `none` = logo only, `badge` = logo left, name right (like
+  shields.io badges).
 
 To add an icon: add an entry to `scripts/icons.json` with a 24×24 SVG
 (`<path d="..."/>`, filled with the current colour). Logos from
@@ -146,7 +190,7 @@ Read and write permissions*.
 
 - The workflow token only has `contents: write` on this repo and only reads
   public data. No other secrets are used.
-- All option values are validated in `resolve()` (render.mjs): colours must be
+- All option values are validated in `resolve()` (lib/settings.mjs): colours must be
   hex, numbers are clamped, select options are checked, image names cannot
   contain paths, module ids are plain names. This keeps settings from
   injecting markup into SVGs or writing/reading files outside the repo folders.

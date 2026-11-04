@@ -86,20 +86,37 @@ export function heading(p, theme, label, small = false) {
 
 const TILE_W = 168, TILE_H = 132;
 
-/** 168x132 tile: logo on top, label below. Long labels get tighter spacing / smaller pitch. */
-export function tile(p, theme, icon) {
-  return svgDoc(TILE_W, TILE_H, tileBody(p, theme, icon));
+/**
+ * One icon as a card, in one of three styles (all scale with the README):
+ *   below  168x132, logo on top, label below (default)
+ *   none   132x132, logo only
+ *   badge  48 high, logo left, label right; width follows the label
+ * Returns {w, h, body}; body is SVG without the <svg> wrapper.
+ */
+export function tileParts(p, theme, icon, style = "below") {
+  const logo = (size, cx, cy) => { // logos are 24x24 markup; wordmarks get a larger "scale"
+    const s = size * (icon.scale || 1);
+    return `<g transform="translate(${n(cx - s / 2)} ${n(cy - s / 2)}) scale(${(s / 24).toFixed(3)})" ` +
+      `fill="${theme.fg}" color="${theme.fg}">${icon.svg}</g>`;
+  };
+  if (style === "none") return { w: TILE_H, h: TILE_H, body: p.cardBody(TILE_H, TILE_H, logo(60, TILE_H / 2, TILE_H / 2)) };
+  if (style === "badge") {
+    const H = 48, label = p.text(icon.label, 0, 0, { pitch: 2.6, fill: theme.muted });
+    const w = Math.ceil(16 + 26 + 12 + label.w + 16);
+    return { w, h: H, body: p.cardBody(w, H, logo(26, 16 + 13, H / 2) + `<g transform="translate(54 ${n((H - label.h) / 2)})">${label.svg}</g>`) };
+  }
+  // Long labels get tighter letter spacing, then a smaller pitch, so they always fit.
+  const gap = icon.label.length > 8 ? 0.6 : 1;
+  const pitch = Math.min(3.0, (TILE_W - 16) / (p.unitWidth(icon.label, { gap }) + 2 * theme.dot));
+  const label = p.text(icon.label, TILE_W / 2, 0, { pitch, fill: theme.muted, gap, anchor: "middle" });
+  return { w: TILE_W, h: TILE_H, body: p.cardBody(TILE_W, TILE_H,
+    `${logo(48, TILE_W / 2, 46)}<g transform="translate(0 ${n(112 - label.h / 2)})">${label.svg}</g>`) };
 }
 
-function tileBody(p, theme, icon) {
-  const W = TILE_W, H = TILE_H;
-  const gap = icon.label.length > 8 ? 0.6 : 1;
-  const pitch = Math.min(3.0, (W - 16) / (p.unitWidth(icon.label, { gap }) + 2 * theme.dot));
-  const label = p.text(icon.label, W / 2, 0, { pitch, fill: theme.muted, gap, anchor: "middle" });
-  const size = 48 * (icon.scale || 1); // logos are 24x24 markup, drawn at 48px (or larger for wordmarks)
-  const logo = `<g transform="translate(${n((W - size) / 2)} ${n(46 - size / 2)}) scale(${(size / 24).toFixed(3)})" ` +
-    `fill="${theme.fg}" color="${theme.fg}">${icon.svg}</g>`;
-  return p.cardBody(W, H, `${logo}<g transform="translate(0 ${n(112 - label.h / 2)})">${label.svg}</g>`);
+/** One icon card as a standalone SVG; also returns its size. */
+export function tile(p, theme, icon, style = "below") {
+  const t = tileParts(p, theme, icon, style);
+  return { svg: svgDoc(t.w, t.h, t.body), w: t.w, h: t.h };
 }
 
 /**
@@ -110,14 +127,17 @@ function tileBody(p, theme, icon) {
  */
 export function categoryRows(p, theme, groups, o) {
   const GAP = 12, TILE_GAP = 6, HEAD = 40;
-  const tileH = o.grid_size, tileW = (tileH * TILE_W) / TILE_H;
+  // Tiles are grid_size px high at full README width; badges half of that
+  // (they are wide and low, so the same factor would make them unreadable).
+  const scale = o.tile === "badge" ? (o.grid_size * 0.5) / 48 : o.grid_size / TILE_H;
   const narrowW = (CARD_W - (o.columns - 1) * GAP) / o.columns;
+  const isWide = (g) => o.wide_toggle === "on" && g[1].length > o.wide_above;
 
   // Rows of up to `columns` categories; with wide_toggle, big categories get a row of their own.
   const rows = [];
   let current = [];
   for (const g of groups) {
-    if (o.wide_toggle === "on" && g[1].length > o.wide_above) {
+    if (isWide(g)) {
       if (current.length) rows.push(current);
       rows.push([g]); current = [];
     } else {
@@ -128,21 +148,24 @@ export function categoryRows(p, theme, groups, o) {
   if (current.length) rows.push(current);
 
   return rows.map((row) => {
-    const cellW = row.length === 1 && row[0][1].length > o.wide_above && o.wide_toggle === "on" ? CARD_W : narrowW;
-    const perLine = Math.max(1, Math.floor((cellW + TILE_GAP) / (tileW + TILE_GAP)));
+    const cellW = isWide(row[0]) ? CARD_W : narrowW;
     const cells = row.map(([title, icons], i) => {
-      const x = i * (cellW + GAP);
+      const x0 = i * (cellW + GAP);
       // Shrink long headings to fit the column (down to pitch 1.8), cut only below that.
       const pitch = Math.max(1.8, Math.min(3.0, (cellW - 28) / (p.unitWidth(title) + 2 * theme.dot)));
-      const label = p.text(p.truncate(title, pitch, cellW - 28), x + 14, 0, { pitch, fill: theme.fg });
-      const head = `<rect x="${n(x)}" width="${n(cellW)}" height="${HEAD}" rx="${theme.radius}" fill="${theme.bg}"/>` +
+      const label = p.text(p.truncate(title, pitch, cellW - 28), x0 + 14, 0, { pitch, fill: theme.fg });
+      const head = `<rect x="${n(x0)}" width="${n(cellW)}" height="${HEAD}" rx="${theme.radius}" fill="${theme.bg}"/>` +
         `<g transform="translate(0 ${n((HEAD - label.h) / 2)})">${label.svg}</g>`;
-      const tiles = icons.map((icon, k) => {
-        const tx = x + (k % perLine) * (tileW + TILE_GAP), ty = HEAD + 8 + Math.floor(k / perLine) * (tileH + TILE_GAP);
-        return `<svg x="${n(tx)}" y="${n(ty)}" width="${n(tileW)}" height="${n(tileH)}" viewBox="0 0 ${TILE_W} ${TILE_H}">${tileBody(p, theme, icon)}</svg>`;
+      // Flow layout: tiles left to right, wrapping inside the column.
+      let x = 0, y = HEAD + 8, lineH = 0;
+      const tiles = icons.map((icon) => {
+        const t = tileParts(p, theme, icon, o.tile), w = t.w * scale, h = t.h * scale;
+        if (x > 0 && x + w > cellW) { x = 0; y += lineH + TILE_GAP; lineH = 0; }
+        const svg = `<svg x="${n(x0 + x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" viewBox="0 0 ${t.w} ${t.h}">${t.body}</svg>`;
+        x += w + TILE_GAP; lineH = Math.max(lineH, h);
+        return svg;
       });
-      const lines = Math.ceil(icons.length / perLine);
-      return { svg: head + tiles.join(""), h: HEAD + 8 + lines * tileH + (lines - 1) * TILE_GAP };
+      return { svg: head + tiles.join(""), h: y + lineH };
     });
     const height = Math.ceil(Math.max(...cells.map((c) => c.h)));
     return { svg: svgDoc(CARD_W, height, cells.map((c) => c.svg).join("")), alt: row.map(([t]) => t).join(" · ") };
@@ -178,6 +201,34 @@ export function projectCard(p, theme, repo) {
   const lang = p.text(repo.language || "", pad, 100, { pitch: 2.6, fill: theme.muted });
   const stars = p.text(String(repo.stars), W - pad, 100, { pitch: 2.6, fill: theme.fg, anchor: "end" });
   return p.card(W, H, name.svg + desc + lang.svg + stars.svg + star(W - pad - stars.w - 16, 99, theme.fg));
+}
+
+/**
+ * Person / company card (430x96): round image, name, role.
+ *   avatar  {mime, base64} (GitHub avatar, shown greyscale) or null
+ *   icon    catalog icon (logo) or null; without both: initials in dots
+ */
+export function personCard(p, theme, entry, avatar, icon) {
+  const W = 430, H = 96, R = 28, cx = 22 + R, cy = H / 2;
+  let image;
+  if (avatar) {
+    image = `<defs><clipPath id="c"><circle cx="${cx}" cy="${cy}" r="${R}"/></clipPath>` +
+      `<filter id="g"><feColorMatrix type="saturate" values="0"/></filter></defs>` +
+      `<image href="data:${avatar.mime};base64,${avatar.base64}" x="${cx - R}" y="${cy - R}" width="${2 * R}" height="${2 * R}" ` +
+      `clip-path="url(#c)" filter="url(#g)"/>`;
+  } else if (icon) {
+    const size = 32 * (icon.scale || 1);
+    image = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${theme.dim}"/>` +
+      `<g transform="translate(${n(cx - size / 2)} ${n(cy - size / 2)}) scale(${(size / 24).toFixed(3)})" fill="${theme.fg}" color="${theme.fg}">${icon.svg}</g>`;
+  } else {
+    const initials = entry.name.split(/\s+/).map((w) => w[0] || "").join("").slice(0, 2);
+    const t = p.text(initials, cx, 0, { pitch: 3.0, fill: theme.fg, anchor: "middle" });
+    image = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${theme.dim}"/><g transform="translate(0 ${n(cy - t.h / 2)})">${t.svg}</g>`;
+  }
+  const x = cx + R + 18, maxW = W - x - 20;
+  const name = p.text(p.truncate(entry.name, 3.4, maxW), x, 22, { pitch: 3.4, fill: theme.fg });
+  const role = entry.role ? p.text(p.truncate(entry.role, 2.4, maxW), x, 58, { pitch: 2.4, fill: theme.muted }).svg : "";
+  return p.card(W, H, image + name.svg + role);
 }
 
 export function releaseCard(p, theme, rel) {
@@ -278,7 +329,7 @@ export function renderLabel(theme, font, str, { pitch = 2.6, fill = theme.fg } =
 }
 
 /** One icon tile as SVG text (used by the editor's icon picker). */
-export const renderTile = (theme, font, icon) => tile(painter(theme, font), theme, icon);
+export const renderTile = (theme, font, icon) => tile(painter(theme, font), theme, icon).svg;
 
 // ---------------------------------------------------------------- images --
 

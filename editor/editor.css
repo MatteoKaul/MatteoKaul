@@ -114,7 +114,10 @@ main {
 .pick:hover { opacity: 1; border-color: var(--line-hi); }
 .pick.on { opacity: 1; border-color: var(--accent); }
 .pick img { width: 100%; display: block; border-radius: 8px; }
-.link-row { display: grid; grid-template-columns: 120px 1fr auto; gap: 6px; margin-bottom: 6px; }
+.entry-row { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)) auto; gap: 6px; margin-bottom: 6px; }
+.entry-row input, .entry-row select { min-width: 0; }
+.entry-row.wide { grid-template-columns: 1fr 1fr; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.entry-row.wide button { grid-column: 2; justify-self: end; }
 
 /* ---- preview (the README itself is styled inside the iframe, see editor.js) ---- */
 .preview { padding: 12px; display: flex; flex-direction: column; }

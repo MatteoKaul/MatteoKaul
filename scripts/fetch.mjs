@@ -5,9 +5,10 @@
 // Run daily by the workflow before build.mjs. The built-in workflow token is
 // enough, only public data is read. The file is committed so builds (and the
 // editor preview) work without network access.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { avatarLogins, imageSize, parseSettings, resolve } from "./render.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { GITHUB_TOKEN, GH_USER } = process.env;
@@ -68,4 +69,17 @@ const data = {
 
 mkdirSync(join(ROOT, "data"), { recursive: true });
 writeFileSync(join(ROOT, "data/github.json"), JSON.stringify(data, null, 1) + "\n");
-console.log(`fetched ${data.repos.length} repos, ${data.calendar.total} contributions`);
+
+// Avatars for people cards ("gh:<login>" images, also of hidden modules so
+// they are ready when a module is switched on). Stored as data/avatars/<login>.png|jpg.
+const logins = avatarLogins(resolve(parseSettings(readFileSync(join(ROOT, "settings.txt"), "utf8"))));
+rmSync(join(ROOT, "data/avatars"), { recursive: true, force: true });
+for (const login of logins) {
+  const res = await fetch(`https://avatars.githubusercontent.com/${login}?s=112`);
+  if (!res.ok) { console.warn(`avatar ${login}: ${res.status}`); continue; }
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const ext = imageSize(bytes).mime === "image/png" ? "png" : "jpg";
+  mkdirSync(join(ROOT, "data/avatars"), { recursive: true });
+  writeFileSync(join(ROOT, `data/avatars/${login}.${ext}`), bytes);
+}
+console.log(`fetched ${data.repos.length} repos, ${data.calendar.total} contributions, ${logins.length} avatars`);
