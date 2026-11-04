@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Profile Editor</title>
+<link rel="stylesheet" href="editor.css">
+</head>
+<body>
+<header class="bar">
+  <strong class="brand">PROFILE EDITOR</strong>
+  <label>Data
+    <select id="dataSource">
+      <option value="github">GitHub data</option>
+      <option value="sample">Sample data</option>
+    </select>
+  </label>
+  <label>Preview
+    <select id="previewMode">
+      <option value="dark">GitHub dark</option>
+      <option value="light">GitHub light</option>
+    </select>
+  </label>
+  <span class="spacer"></span>
+  <label class="button">Import settings.txt<input type="file" id="importFile" accept=".txt" hidden></label>
+  <button id="copy">Copy settings.txt</button>
+  <button id="download" class="primary">Download settings.txt</button>
+  <a id="editOnGithub" class="button" target="_blank" rel="noopener">Edit on GitHub</a>
+</header>
+
+<main>
+  <nav class="panel" id="modules" aria-label="Modules"></nav>
+  <section class="panel" id="options" aria-label="Options"></section>
+  <section class="preview" id="preview" aria-label="Preview">
+    <div class="status" id="status"></div>
+    <article class="readme" id="readme"></article>
+  </section>
+</main>
+
+<script type="module" src="editor.js"></script>
+</body>
+</html>

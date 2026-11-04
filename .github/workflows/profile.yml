@@ -1,12 +1,10 @@
 # Updates everything generated in this repo and commits the result:
-#   build_assets.py  banner, headings, icon tiles, icon rows in README
-#   stats.py         assets/stats.svg (GitHub API)
-#   releases.py      release cards + releases block in README (GitHub API)
-# One workflow so two jobs never push at the same time.
+#   scripts/fetch.mjs  GitHub data -> data/github.json
+#   scripts/build.mjs  settings.txt + data -> README.md and assets/gen/
 #
-# Runs daily (stats and releases change without a commit here), when started
-# manually (Actions tab -> "Update profile" -> "Run workflow") and when
-# settings.txt, the scripts or the source images change on main.
+# Runs daily (stats, activity and releases change without a commit here),
+# when started manually (Actions tab -> "Update profile" -> "Run workflow")
+# and when settings, scripts, fonts or source images change on main.
 # Needs "Read and write permissions" for workflows (Settings -> Actions ->
 # General) so the job can push.
 name: Update profile
@@ -20,38 +18,40 @@ on:
     paths:
       - settings.txt
       - scripts/**
+      - fonts/**
       - assets/src/**
 
 permissions:
   contents: write
+
+# Never run two updates at once (both would push).
+concurrency:
+  group: update-profile
+  cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.x"
+          node-version: 22
 
-      - name: Build assets
-        run: |
-          pip install pillow
-          python scripts/build_assets.py
-
-      # The built-in token is enough: it only reads public profile data.
-      - name: Stats and releases
+      # The built-in token is enough: only public profile data is read.
+      - name: Fetch GitHub data
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_USER: ${{ github.repository_owner }}
-        run: |
-          python scripts/stats.py
-          python scripts/releases.py
+        run: node scripts/fetch.mjs
+
+      - name: Build README and images
+        run: node scripts/build.mjs
 
       # Commits made with GITHUB_TOKEN do not trigger workflows, so no loop.
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A assets README.md
+          git add -A README.md assets/gen data
           git diff --cached --quiet || (git commit -m "Update profile" && git push)

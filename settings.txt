@@ -1,59 +1,144 @@
-# Profile settings. One "key = value" per line, "#" starts a comment.
-# After changing this file on main, the "Build assets" workflow rebuilds the
-# images and README automatically (or run: python scripts/build_assets.py).
+# Profile settings, read by scripts/build.mjs (and the editor in editor/).
+# One "key = value" per line, "#" starts a comment, "\n" is a line break in text.
+# After a change on main, the Update profile workflow rebuilds README.md and the images.
 
-# Text of the top banner. Letters A-Z and spaces; long titles shrink to fit.
-# Examples: MATREXX | MATTEO | MATTEO KAUL | LUMI | LUMIEREZ | LUMI CODE
-banner_title = MATREXX
+# Modules from top to bottom. Remove an id to hide that module (its options stay below).
+# Types: banner, text, icons, projects, releases, stats, activity, socials, divider. A new module: add an id here and "<id>.type = <type>".
+layout = banner, about, icons, projects, releases, stats
 
-# Darkness of the soft shadow around the banner letters, 0 (off) to 100.
+# ---- theme ----
+# Dot font from fonts/<name>.json
+# Options: led
+theme.font = led
+# circle = LED look, square = pixel look, rounded = in between
+# Options: circle | square | rounded
+theme.shape = circle
+# Dot radius relative to the dot spacing (0.5 = dots touch)
+theme.dot = 0.39
+# Italic slant, 0 = upright
+theme.slant = 0.22
+# Main text and logos
+theme.fg = #ffffff
+# Labels and secondary text
+theme.muted = #cfcfcf
+# Placeholders and hints
+theme.faint = #7a7a7a
+# Inactive dots (bars, activity grid)
+theme.dim = #2c2c2c
+# Background of all cards and bars
+theme.bg = #000000
+# Card outline
+theme.border = #2a2a2a
+# Rounding of cards and bars in px
+theme.radius = 12
+# Font for longer text (project descriptions); must be installed on the viewer's system
+theme.text_font = ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
+
+# ---- banner: Banner ----
+# Big title on a background image
+# Letters A-Z and spaces; long titles shrink to fit. E.g. MATTEO KAUL, LUMI, LUMIEREZ, LUMI CODE
+banner.title = MATREXX
+# File in assets/src (png, jpg or webp), or none
+banner.image = background.webp
+# Used when image = none
+banner.color = #111111
+# Which part of the photo is shown, 0 = top, 100 = bottom
+banner.position = 30
+# Reference: 30 = dark | 42 = default | 70 = bright
+banner.brightness = 42
 # Reference: 40 = barely visible | 60 = subtle (default) | 67 = stronger
-banner_shadow = 60
+banner.shadow = 60
 
-# Display height of the language / system icon tiles in the README, in pixels.
-# Reference: 120 = large | 100 = medium (default) | 80 = small
-icon_size = 100
+# ---- about: Text ----
+# Free text (Markdown)
+# Leave empty for no heading
+about.title = ABOUT
+# Markdown; line breaks are kept
+about.text = Student of **Applied Computer Science**, based in Germany.\nBuilding things, learning across the stack.
 
-# Icon tiles in the README, shown in the order given. Comma separated keys;
-# remove a key to hide it, add one to show it. Any key works in either list.
-# Full list: python scripts/build_assets.py --list
-#
-# Languages: c, cpp, csharp, java, javascript, typescript, python, sql, go, rust,
-#   kotlin, swift, dart, php, ruby, lua, r, scala, haskell, elixir,
-#   erlang, clojure, fsharp, ocaml, julia, perl, zig, nim, crystal,
-#   fortran, solidity, wasm, bash, html, css, graphql, markdown, json,
-#   yaml, latex
-# Frameworks: react, vue, angular, svelte, nextjs, nodejs, deno, bun, express, nestjs,
-#   django, flask, fastapi, spring, laravel, rails, dotnet, tailwind,
-#   bootstrap, qt, tensorflow, pytorch, numpy, pandas, jupyter, opencv
-# Build: cmake, make, gradle, maven, bazel, llvm, gnu, npm, pnpm, yarn, vite,
-#   webpack
-# Os: macos, windows, linux, cachyos, archlinux, ubuntu, debian, fedora,
-#   nixos, manjaro, mint, opensuse, alpine, centos, rocky, kali, popos,
-#   endeavouros, gentoo, freebsd, raspberrypi, truenas, unraid,
-#   synology, proxmox, ios, android
-# Devops: docker, podman, kubernetes, portainer, ansible, terraform, vagrant,
-#   jenkins, ghactions, git, github, gitlab, nginx, traefik, cloudflare,
-#   wireguard, tailscale, openwrt, pfsense, opnsense, vmware,
-#   virtualbox, qemu, grafana, prometheus
-# Databases: mysql, postgresql, sqlite, mariadb, redis, mongodb, influxdb, elastic,
-#   kafka, rabbitmq
-# Cloud: gcp, digitalocean, hetzner, vercel, netlify, firebase, supabase
-# Editors: neovim, vim, emacs, intellij, pycharm, clion, webstorm, eclipse, xcode,
-#   androidstudio, zsh, tmux, alacritty, iterm2, wezterm, ghostty
-# Hardware: arduino, esp32, esphome, platformio, nvidia, amd, intel
-# Apps: homeassistant, nextcloud, jellyfin, plex, figma, blender, obs, postman,
-#   jira, notion, obsidian, discord, steam, godot, unity, claude,
-#   ollama, huggingface
-languages = c, javascript, typescript, java, python
-systems = macos, cachyos, windows, ubuntu, raspberrypi, truenas, docker
+# ---- icons: Icons ----
+# Logo tiles, grouped into categories automatically
+# Shown icons, in this order within each category (see scripts/icons.json)
+# Available, by category:
+#   languages: c, cpp, csharp, java, javascript, typescript, python, sql, go, rust, kotlin, swift, dart, php, ruby, lua, r, scala, haskell, elixir, erlang, clojure, fsharp, ocaml, julia, perl, zig, nim, crystal, fortran, solidity, wasm, bash
+#   markup: html, css, markdown, latex, json, yaml, graphql
+#   frameworks: react, vue, angular, svelte, nextjs, nodejs, deno, bun, express, nestjs, django, flask, fastapi, spring, laravel, rails, dotnet, tailwind, bootstrap, qt
+#   data: tensorflow, pytorch, numpy, pandas, jupyter, opencv
+#   build: cmake, make, gradle, maven, bazel, llvm, gnu, npm, pnpm, yarn, vite, webpack
+#   os: macos, windows, linux, cachyos, archlinux, ubuntu, debian, fedora, nixos, manjaro, mint, opensuse, alpine, centos, rocky, kali, popos, endeavouros, gentoo, freebsd, raspberrypi, ios, android
+#   desktop: gnome, kde, hyprland, i3, sway
+#   homelab: truenas, unraid, synology, proxmox, vmware, virtualbox, qemu
+#   devops: docker, podman, kubernetes, portainer, ansible, terraform, vagrant, jenkins, ghactions
+#   git: git, github, gitlab, gitea, forgejo
+#   network: nginx, caddy, traefik, cloudflare, letsencrypt, wireguard, tailscale, openwrt, pfsense, opnsense, pihole, adguard
+#   services: matrix, element, homeassistant, nextcloud, immich, jellyfin, plex, vaultwarden, paperless, syncthing, uptimekuma, homepage, homarr, grafana, prometheus, nodered, mqtt, zigbee2mqtt
+#   databases: mysql, postgresql, sqlite, mariadb, redis, mongodb, influxdb, elastic, kafka, rabbitmq
+#   cloud: gcp, digitalocean, hetzner, vercel, netlify, firebase, supabase
+#   editors: neovim, vim, emacs, vscodium, cursor, sublime, intellij, pycharm, clion, webstorm, eclipse, xcode, androidstudio
+#   terminals: ghostty, alacritty, wezterm, iterm2, warp, zsh, fish, nushell, tmux
+#   security: bitwarden, keepassxc, gpg
+#   ai: claude, anthropic, ollama, huggingface
+#   gamedev: godot, unity, blender
+#   hardware: arduino, esp32, esphome, platformio, nvidia, amd, intel
+#   apps: figma, obs, postman, jira, notion, obsidian, discord, steam
+#   social: twitch, youtube, linkedin, instagram, x, mastodon, bluesky, threads, reddit, tiktok, facebook, xing, telegram, signal, whatsapp, spotify, soundcloud, kofi, patreon, buymeacoffee, devto, medium, stackoverflow, leetcode, kaggle, orcid, scholar, itchio, artstation, behance, dribbble, pinterest, email, website
+icons.items = c, javascript, typescript, java, python, macos, cachyos, windows, ubuntu, raspberrypi, truenas, docker, wireguard, ghostty, claude, godot
+# sections = a full heading per category | compact = one heading, small category labels
+# Options: sections | compact
+icons.style = sections
+# Only used with style = compact
+icons.title = SKILLS & TOOLS
+# Display height in px. Reference: 120 = large | 100 = medium (default) | 80 = small
+icons.size = 100
+# icon=category pairs, e.g. wireguard=services
+icons.move = 
+# Categories listed first, in this order; the rest follow in catalog order
+icons.order = 
+# category=HEADING pairs to rename categories, e.g. os=SYSTEMS
+icons.titles = 
 
-# Release cards (updated daily from GitHub). Each card links to the release.
-#   off    = no releases section
-#   latest = one card: the newest release across all public repos
-#   each   = one card per public repo with a release (newest first)
-#   list   = one card per repo named in releases_repos, in that order
-# Shows "NO RELEASES YET" while none of your public repos has a release.
-releases = each
-releases_repos =
-releases_limit = 6
+# ---- projects: Projects ----
+# Cards for your repositories (GitHub data)
+projects.title = PROJECTS
+# pinned = repos pinned on your profile | recent = last pushed | list = the repos below
+# Options: pinned | recent | list
+projects.mode = pinned
+# Repo names, in this order
+projects.repos = 
+projects.limit = 6
+# hide = section disappears until there is something to show | placeholder = show a NO ... YET card
+# Options: hide | placeholder
+projects.empty = hide
+
+# ---- releases: Releases ----
+# Cards linking to your latest releases (GitHub data)
+releases.title = RELEASES
+# latest = only the newest release across all repos | each = latest release of every repo | list = the repos below
+# Options: latest | each | list
+releases.mode = latest
+releases.repos = 
+releases.limit = 6
+# hide = section disappears until there is something to show | placeholder = show a NO ... YET card
+# Options: hide | placeholder
+releases.empty = hide
+
+# ---- stats: Stats ----
+# Repos, stars, commits, followers and top languages (GitHub data)
+stats.title = STATS
+# How many language bars, 0 = none
+stats.languages = 5
+
+# ---- activity: Activity (hidden, not in layout) ----
+# Contribution calendar of the last year as a dot grid (GitHub data)
+activity.title = ACTIVITY
+activity.weeks = 53
+
+# ---- socials: Socials (hidden, not in layout) ----
+# Link tiles to your profiles
+socials.title = CONTACT
+# icon=url pairs, e.g. twitch=https://www.twitch.tv/name, email=mailto:me@example.com
+socials.items = github=https://github.com/MatteoKaul, twitch=https://www.twitch.tv/matrexx_live
+socials.size = 72
+
+# ---- divider: Divider (hidden, not in layout) ----
+# A dotted line
