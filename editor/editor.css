@@ -91,6 +91,9 @@ main {
 .row input[type=number] { width: 76px; }
 .row input[type=text] { flex: 1; }
 
+.field > label.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 400; margin: 0; }
+.switch input { accent-color: #fff; width: 16px; height: 16px; }
+
 /* ---- icon editor ---- */
 .cat { border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-bottom: 8px; background: var(--field); }
 .cat-head { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }

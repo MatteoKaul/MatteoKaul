@@ -74,7 +74,17 @@ export const TYPES = {
         help: "sections = a full heading per category | compact = one heading, small category labels" },
       { key: "title", label: "Heading (compact)", type: "text", default: "SKILLS & TOOLS", help: "Only used with style = compact" },
       { key: "size", label: "Tile size", type: "number", ...SIZE, default: 100,
-        help: "Display height in px. Reference: 120 = large | 100 = medium (default) | 80 = small" },
+        help: "Display height in px (columns = 1). Reference: 120 = large | 100 = medium (default) | 80 = small" },
+      { key: "columns", label: "Categories side by side", type: "number", min: 1, max: 4, step: 1, default: 1,
+        help: "1 = one category per row with large headings | 2-4 = small headings and tiles, categories in columns" },
+      { key: "grid_size", label: "Tile size (columns > 1)", type: "number", min: 40, max: 100, step: 2, default: 64,
+        help: "Tile height in px at full README width. Reference: 80 = large | 64 = default | 48 = small" },
+      { key: "min_toggle", label: "Hide small categories", type: "toggle", default: "off",
+        help: "on = only show categories with at least \"Minimum icons\" icons" },
+      { key: "min_icons", label: "Minimum icons", type: "number", min: 1, max: 4, step: 1, default: 2 },
+      { key: "wide_toggle", label: "Full row for large categories", type: "toggle", default: "off",
+        help: "on = with columns > 1, categories with more than \"Full row above\" icons get a whole row" },
+      { key: "wide_above", label: "Full row above", type: "number", min: 1, max: 4, step: 1, default: 4 },
       { key: "move", label: "Category overrides", type: "pairs", default: "",
         help: "icon=category pairs, e.g. wireguard=services" },
       { key: "order", label: "Category order", type: "list", default: "",
@@ -230,6 +240,8 @@ function convert(field, value, name) {
       return /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : fail("use a hex colour like #ffffff");
     case "select":
       return field.options.includes(value) ? value : fail(`use one of ${field.options.join(", ")}`);
+    case "toggle":
+      return value === "on" || value === "off" ? value : fail("use on or off");
     case "name": // a plain file name without extension, e.g. a font in fonts/
       return /^[\w-]+$/.test(value) ? value : fail("use a plain name (letters, digits, - and _)");
     case "file": // a plain file name inside assets/src, no paths
@@ -309,10 +321,12 @@ function painter(theme, font) {
     return str + ".";
   }
 
-  const card = (w, h, body) => svgDoc(w, h,
-    `<rect x=".5" y=".5" width="${w - 1}" height="${h - 1}" rx="${theme.radius}" fill="${theme.bg}" stroke="${theme.border}"/>${body}`);
+  /** Card background + content, without the <svg> wrapper (for nesting). */
+  const cardBody = (w, h, body) =>
+    `<rect x=".5" y=".5" width="${w - 1}" height="${h - 1}" rx="${theme.radius}" fill="${theme.bg}" stroke="${theme.border}"/>${body}`;
+  const card = (w, h, body) => svgDoc(w, h, cardBody(w, h, body));
 
-  return { text, unitWidth, truncate, card, small, large };
+  return { text, unitWidth, truncate, card, cardBody, small, large };
 }
 
 // --------------------------------------------------------------- pieces --
@@ -324,16 +338,69 @@ function heading(p, theme, label, small = false) {
   return svgDoc(CARD_W, h, `<rect width="${CARD_W}" height="${h}" rx="${theme.radius}" fill="${theme.bg}"/>${t.svg}`);
 }
 
+const TILE_W = 168, TILE_H = 132;
+
 /** 168x132 tile: logo on top, label below. Long labels get tighter spacing / smaller pitch. */
 function tile(p, theme, icon) {
-  const W = 168, H = 132;
+  return svgDoc(TILE_W, TILE_H, tileBody(p, theme, icon));
+}
+
+function tileBody(p, theme, icon) {
+  const W = TILE_W, H = TILE_H;
   const gap = icon.label.length > 8 ? 0.6 : 1;
   const pitch = Math.min(3.0, (W - 16) / (p.unitWidth(icon.label, { gap }) + 2 * theme.dot));
   const label = p.text(icon.label, W / 2, 0, { pitch, fill: theme.muted, gap, anchor: "middle" });
   const size = 48 * (icon.scale || 1); // logos are 24x24 markup, drawn at 48px (or larger for wordmarks)
   const logo = `<g transform="translate(${n((W - size) / 2)} ${n(46 - size / 2)}) scale(${(size / 24).toFixed(3)})" ` +
     `fill="${theme.fg}" color="${theme.fg}">${icon.svg}</g>`;
-  return p.card(W, H, `${logo}<g transform="translate(0 ${n(112 - label.h / 2)})">${label.svg}</g>`);
+  return p.cardBody(W, H, `${logo}<g transform="translate(0 ${n(112 - label.h / 2)})">${label.svg}</g>`);
+}
+
+/**
+ * Categories side by side (icons module with columns > 1). Each row of
+ * categories is one SVG, so a category's tiles always stay in its own column.
+ *   groups  [[title, [icon]]] in display order
+ * Returns [{svg, alt}], one per row.
+ */
+function categoryRows(p, theme, groups, o) {
+  const GAP = 12, TILE_GAP = 6, HEAD = 40;
+  const tileH = o.grid_size, tileW = (tileH * TILE_W) / TILE_H;
+  const narrowW = (CARD_W - (o.columns - 1) * GAP) / o.columns;
+
+  // Rows of up to `columns` categories; with wide_toggle, big categories get a row of their own.
+  const rows = [];
+  let current = [];
+  for (const g of groups) {
+    if (o.wide_toggle === "on" && g[1].length > o.wide_above) {
+      if (current.length) rows.push(current);
+      rows.push([g]); current = [];
+    } else {
+      current.push(g);
+      if (current.length === o.columns) { rows.push(current); current = []; }
+    }
+  }
+  if (current.length) rows.push(current);
+
+  return rows.map((row) => {
+    const cellW = row.length === 1 && row[0][1].length > o.wide_above && o.wide_toggle === "on" ? CARD_W : narrowW;
+    const perLine = Math.max(1, Math.floor((cellW + TILE_GAP) / (tileW + TILE_GAP)));
+    const cells = row.map(([title, icons], i) => {
+      const x = i * (cellW + GAP);
+      // Shrink long headings to fit the column (down to pitch 1.8), cut only below that.
+      const pitch = Math.max(1.8, Math.min(3.0, (cellW - 28) / (p.unitWidth(title) + 2 * theme.dot)));
+      const label = p.text(p.truncate(title, pitch, cellW - 28), x + 14, 0, { pitch, fill: theme.fg });
+      const head = `<rect x="${n(x)}" width="${n(cellW)}" height="${HEAD}" rx="${theme.radius}" fill="${theme.bg}"/>` +
+        `<g transform="translate(0 ${n((HEAD - label.h) / 2)})">${label.svg}</g>`;
+      const tiles = icons.map((icon, k) => {
+        const tx = x + (k % perLine) * (tileW + TILE_GAP), ty = HEAD + 8 + Math.floor(k / perLine) * (tileH + TILE_GAP);
+        return `<svg x="${n(tx)}" y="${n(ty)}" width="${n(tileW)}" height="${n(tileH)}" viewBox="0 0 ${TILE_W} ${TILE_H}">${tileBody(p, theme, icon)}</svg>`;
+      });
+      const lines = Math.ceil(icons.length / perLine);
+      return { svg: head + tiles.join(""), h: HEAD + 8 + lines * tileH + (lines - 1) * TILE_GAP };
+    });
+    const height = Math.ceil(Math.max(...cells.map((c) => c.h)));
+    return { svg: svgDoc(CARD_W, height, cells.map((c) => c.svg).join("")), alt: row.map(([t]) => t).join(" · ") };
+  });
 }
 
 function placeholderCard(p, theme, message, w = 430, h = 108) {
@@ -550,15 +617,20 @@ export function render(cfg, data, assets) {
         blocks.push(join(headingBlock(m, o.title), o.text.split("\n").join("  \n")));
         break;
       case "icons": {
-        const groups = iconGroups(o, catalog);
+        const groups = iconGroups(o, catalog)
+          .filter(([, keys]) => o.min_toggle !== "on" || keys.length >= o.min_icons);
         const titles = Object.fromEntries(splitPairs(o.titles));
+        const titleOf = (cat) => titles[cat] || catalog.categories[cat] || cat.toUpperCase();
+        if (o.columns > 1) {
+          const rows = categoryRows(p, theme, groups.map(([cat, keys]) => [titleOf(cat), keys.map((k) => catalog.icons[k])]), o);
+          blocks.push(join(o.style === "compact" ? headingBlock(m, o.title) : "",
+            ...rows.map((r, i) => para(img(put(`${m.id}/row-${i + 1}.svg`, r.svg), r.alt, 'width="100%"')))));
+          break;
+        }
         const row = (keys) => "<p>\n" + keys.map((k) =>
           `  ${img(put(`tiles/${k}.svg`, tile(p, theme, catalog.icons[k])), catalog.icons[k].label, `height="${o.size}"`)}`).join("\n") + "\n</p>";
         const parts = o.style === "compact" ? [headingBlock(m, o.title)] : [];
-        for (const [cat, keys] of groups) {
-          const title = titles[cat] || catalog.categories[cat] || cat.toUpperCase();
-          parts.push(headingBlock(m, title, o.style === "compact", `cat-${cat}`), row(keys));
-        }
+        for (const [cat, keys] of groups) parts.push(headingBlock(m, titleOf(cat), o.style === "compact", `cat-${cat}`), row(keys));
         blocks.push(join(...parts));
         break;
       }

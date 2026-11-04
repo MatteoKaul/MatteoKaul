@@ -9,61 +9,13 @@
 Student of **Applied Computer Science**, based in Germany.  
 Building things, learning across the stack.
 
-<p><img src="assets/gen/icons/cat-languages.svg" alt="LANGUAGES" width="100%" /></p>
+<p><img src="assets/gen/icons/row-1.svg" alt="LANGUAGES · OPERATING SYSTEMS" width="100%" /></p>
 
-<p>
-  <img src="assets/gen/tiles/c.svg" alt="C" height="100" />
-  <img src="assets/gen/tiles/javascript.svg" alt="JAVASCRIPT" height="100" />
-  <img src="assets/gen/tiles/typescript.svg" alt="TYPESCRIPT" height="100" />
-  <img src="assets/gen/tiles/java.svg" alt="JAVA" height="100" />
-  <img src="assets/gen/tiles/python.svg" alt="PYTHON" height="100" />
-</p>
+<p><img src="assets/gen/icons/row-2.svg" alt="HOMELAB · CONTAINERS &amp; DEVOPS" width="100%" /></p>
 
-<p><img src="assets/gen/icons/cat-os.svg" alt="OPERATING SYSTEMS" width="100%" /></p>
+<p><img src="assets/gen/icons/row-3.svg" alt="NETWORKING · TERMINALS &amp; SHELLS" width="100%" /></p>
 
-<p>
-  <img src="assets/gen/tiles/macos.svg" alt="MACOS" height="100" />
-  <img src="assets/gen/tiles/cachyos.svg" alt="CACHYOS" height="100" />
-  <img src="assets/gen/tiles/windows.svg" alt="WINDOWS" height="100" />
-  <img src="assets/gen/tiles/ubuntu.svg" alt="UBUNTU" height="100" />
-  <img src="assets/gen/tiles/raspberrypi.svg" alt="PI OS" height="100" />
-</p>
-
-<p><img src="assets/gen/icons/cat-homelab.svg" alt="HOMELAB" width="100%" /></p>
-
-<p>
-  <img src="assets/gen/tiles/truenas.svg" alt="TRUENAS" height="100" />
-</p>
-
-<p><img src="assets/gen/icons/cat-devops.svg" alt="CONTAINERS &amp; DEVOPS" width="100%" /></p>
-
-<p>
-  <img src="assets/gen/tiles/docker.svg" alt="DOCKER" height="100" />
-</p>
-
-<p><img src="assets/gen/icons/cat-network.svg" alt="NETWORKING" width="100%" /></p>
-
-<p>
-  <img src="assets/gen/tiles/wireguard.svg" alt="WIREGUARD" height="100" />
-</p>
-
-<p><img src="assets/gen/icons/cat-terminals.svg" alt="TERMINALS &amp; SHELLS" width="100%" /></p>
-
-<p>
-  <img src="assets/gen/tiles/ghostty.svg" alt="GHOSTTY" height="100" />
-</p>
-
-<p><img src="assets/gen/icons/cat-ai.svg" alt="AI" width="100%" /></p>
-
-<p>
-  <img src="assets/gen/tiles/claude.svg" alt="CLAUDE" height="100" />
-</p>
-
-<p><img src="assets/gen/icons/cat-gamedev.svg" alt="GAME DEV" width="100%" /></p>
-
-<p>
-  <img src="assets/gen/tiles/godot.svg" alt="GODOT" height="100" />
-</p>
+<p><img src="assets/gen/icons/row-4.svg" alt="AI · GAME DEV" width="100%" /></p>
 
 <p><img src="assets/gen/stats/heading.svg" alt="STATS" width="100%" /></p>
 

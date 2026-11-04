@@ -201,6 +201,12 @@ function field(f, value, onChange, module) {
       input = h("select", { onchange: (e) => onChange(e.target.value) },
         f.options.map((o) => h("option", { value: o, selected: o === value }, o)));
       break;
+    case "toggle": // on/off switch
+      input = h("label", { class: "switch" },
+        h("input", { type: "checkbox", checked: value === "on", onchange: (e) => onChange(e.target.checked ? "on" : "off") }),
+        h("span", {}, value === "on" ? "on" : "off"));
+      input.querySelector("input").addEventListener("change", (e) => (input.querySelector("span").textContent = e.target.checked ? "on" : "off"));
+      break;
     case "textarea":
       input = h("textarea", { oninput: (e) => onChange(e.target.value) }, value);
       break;
@@ -340,7 +346,8 @@ function iconEditor(m) {
   }
   drawPicker();
 
-  const style = R.TYPES.icons.fields.filter((f) => ["style", "title", "size"].includes(f.key))
+  // All simple options; items / move / order / titles are edited visually below.
+  const style = R.TYPES.icons.fields.filter((f) => !["items", "move", "order", "titles"].includes(f.key))
     .map((f) => field(f, o[f.key], (v) => set(key(f.key), v)));
 
   return h("div", {},
