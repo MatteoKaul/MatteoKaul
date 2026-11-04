@@ -8,6 +8,7 @@ Writes:
     assets/banner.jpg           banner_title from settings.txt on assets/src/background.webp
     assets/headings/<name>.svg  black section bars with dot-matrix text
     assets/icons/<name>.svg     black tiles: white logo + dot-matrix label
+    README.md                   icon tile height set to icon_size from settings.txt
 
 Logo shapes come from scripts/icons.json (24x24 SVG paths, taken from the
 Simple Icons project; the Windows logo is hand-drawn). To add a tile, add its
@@ -17,6 +18,7 @@ Only needed when changing the design. assets/stats.svg is made by stats.py.
 """
 import argparse
 import json
+import re
 from pathlib import Path
 
 from dotmatrix import LARGE, layout, svg_text
@@ -124,6 +126,15 @@ def banner(title, shadow_pct=60):
     img.resize((W, H), Image.LANCZOS).save(ASSETS / "banner.jpg", quality=92)
 
 
+def set_icon_size(height):
+    """Set height="..." on every icon tile <img> in README.md (also the
+    commented-out ones), so the tile size is controlled from settings.txt."""
+    readme = ROOT / "README.md"
+    text = re.sub(r'(<img src="assets/icons/[^"]+" alt="[^"]*" height=")\d+(")',
+                  rf"\g<1>{height}\2", readme.read_text())
+    readme.write_text(text)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--title", help="banner text (default: banner_title in settings.txt)")
@@ -131,6 +142,7 @@ def main():
     settings = read_settings()
     title = args.title or settings.get("banner_title", "MATREXX")
     shadow_pct = int(settings.get("banner_shadow", 60))
+    icon_size = int(settings.get("icon_size", 100))
 
     (ASSETS / "headings").mkdir(parents=True, exist_ok=True)
     (ASSETS / "icons").mkdir(parents=True, exist_ok=True)
@@ -141,6 +153,7 @@ def main():
     for name, label in TILES:
         (ASSETS / "icons" / f"{name}.svg").write_text(tile(paths[name], label))
 
+    set_icon_size(icon_size)
     banner(title, shadow_pct)
     print(f"assets rebuilt, banner: {title}")
 

@@ -1,10 +1,15 @@
 # Profile settings. One "key = value" per line, "#" starts a comment.
-# After changing this file on main, the "Build assets" workflow rebuilds
-# assets/banner.jpg automatically (or run: python scripts/build_assets.py).
+# After changing this file on main, the "Build assets" workflow rebuilds the
+# images and README automatically (or run: python scripts/build_assets.py).
 
 # Text of the top banner. Letters A-Z and spaces; long titles shrink to fit.
 # Examples: MATREXX | MATTEO | MATTEO KAUL | LUMI | LUMIEREZ | LUMI CODE
 banner_title = MATREXX
 
 # Darkness of the soft shadow around the banner letters, 0 (off) to 100.
+# Reference: 40 = barely visible | 60 = subtle (default) | 67 = stronger
 banner_shadow = 60
+
+# Display height of the language / system icon tiles in the README, in pixels.
+# Reference: 120 = large | 100 = medium (default) | 80 = small
+icon_size = 100
