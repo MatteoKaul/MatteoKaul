@@ -47,7 +47,7 @@ export const TYPES = {
     fields: [
       { key: "title", label: "Title", type: "text", default: "MATREXX",
         help: "Letters A-Z and spaces; long titles shrink to fit. E.g. MATTEO KAUL, LUMI, LUMIEREZ, LUMI CODE" },
-      { key: "image", label: "Background image", type: "text", default: "background.webp",
+      { key: "image", label: "Background image", type: "file", default: "background.webp",
         help: "File in assets/src (png, jpg or webp), or none" },
       { key: "color", label: "Background colour", type: "color", default: "#111111", help: "Used when image = none" },
       { key: "position", label: "Image position", type: "number", min: 0, max: 100, step: 1, default: 30,
@@ -188,26 +188,47 @@ export function writeSettings(settings, catalog) {
 /** Flat settings -> {theme, layout: [module], modules: [module]}; module = {id, type, opt}. */
 export function resolve(settings) {
   const theme = {};
-  for (const f of THEME_FIELDS) theme[f.key] = convert(f, settings[`theme.${f.key}`]);
+  for (const f of THEME_FIELDS) theme[f.key] = convert(f, settings[`theme.${f.key}`], `theme.${f.key}`);
 
   const layoutIds = settings.layout !== undefined ? splitList(settings.layout) : DEFAULT_LAYOUT;
   const ids = [...new Set([...layoutIds, ...Object.keys(settings)
     .filter((k) => k.includes(".") && !k.startsWith("theme.")).map((k) => k.split(".")[0])])];
 
   const modules = ids.map((id) => {
+    // ids become folder names in assets/gen, so keep them simple
+    if (!/^[a-z0-9_-]+$/i.test(id)) throw new Error(`Module id "${id}": use letters, digits, - and _ only`);
     const type = settings[`${id}.type`] || TYPE_ALIASES[id] || id;
     if (!TYPES[type]) throw new Error(`Module "${id}": unknown type "${type}" (add "${id}.type = <type>")`);
     const opt = {};
-    for (const f of TYPES[type].fields) opt[f.key] = convert(f, settings[`${id}.${f.key}`]);
+    for (const f of TYPES[type].fields) opt[f.key] = convert(f, settings[`${id}.${f.key}`], `${id}.${f.key}`);
     return { id, type, opt };
   });
   const byId = Object.fromEntries(modules.map((m) => [m.id, m]));
   return { theme, layout: layoutIds.map((id) => byId[id]), modules };
 }
 
-function convert(field, value) {
+/**
+ * Settings value -> typed option, validated. Values end up in SVG attributes
+ * and file paths, so anything unexpected is rejected instead of passed on.
+ */
+function convert(field, value, name) {
   if (value === undefined || value === "") return field.default;
-  return field.type === "number" ? Number(value) : value;
+  const fail = (why) => { throw new Error(`${name} = ${value}: ${why}`); };
+  switch (field.type) {
+    case "number": {
+      const num = Number(value);
+      if (!Number.isFinite(num)) fail("not a number");
+      return Math.min(field.max ?? Infinity, Math.max(field.min ?? -Infinity, num));
+    }
+    case "color":
+      return /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : fail("use a hex colour like #ffffff");
+    case "select":
+      return field.options.includes(value) ? value : fail(`use one of ${field.options.join(", ")}`);
+    case "file": // a plain file name inside assets/src, no paths
+      return value === "none" || /^[\w-]+(\.[\w-]+)*\.(png|jpe?g|webp)$/i.test(value) ? value : fail("use a png/jpg/webp file name from assets/src, or none");
+    default:
+      return value;
+  }
 }
 
 export const splitList = (value) => String(value).split(",").map((s) => s.trim()).filter(Boolean);
@@ -363,7 +384,7 @@ function statsCard(p, theme, s, languages) {
   if (languages > 0) {
     y += 24;
     parts.push(p.text("TOP LANGUAGES", 24, y, { pitch: 3.0, fill: theme.muted }).svg);
-    y += 32;
+    y += 40;
     const langs = s.languages.slice(0, languages);
     if (!langs.length) { parts.push(p.text("NO PUBLIC CODE YET", 24, y, { pitch: 4.0, fill: theme.faint }).svg); y += 30; }
     for (const [name, pct] of langs) {
@@ -427,6 +448,12 @@ function bannerSvg(p, theme, opt, image) {
     body.push(`<g transform="translate(0 ${y})">${t.svg}</g>`);
   }
   return svgDoc(W, H, `<defs>${defs.join("")}</defs>${body.join("")}`);
+}
+
+/** Dot-matrix text as a standalone SVG (used for the editor's own headings). */
+export function renderLabel(theme, font, str, { pitch = 2.6, fill = theme.fg } = {}) {
+  const t = painter(theme, font).text(str, 0, 0, { pitch, fill });
+  return svgDoc(n(t.w + 2), n(t.h), t.svg);
 }
 
 /** One icon tile as SVG text (used by the editor's icon picker). */
@@ -493,8 +520,10 @@ export function render(cfg, data, assets) {
   const files = {}, blocks = [];
   const put = (path, svg) => { files[`assets/gen/${path}`] = svg; return `assets/gen/${path}`; };
   const img = (src, alt, attrs) => `<img src="${src}" alt="${esc(alt)}" ${attrs} />`;
+  // Wrapped in <p> so GitHub adds the usual paragraph spacing below images.
+  const para = (html) => `<p>${html}</p>`;
   const headingBlock = (m, title, small = false, key = "heading") =>
-    title ? img(put(`${m.id}/${key}.svg`, heading(p, theme, title, small)), title, 'width="100%"') : "";
+    title ? para(img(put(`${m.id}/${key}.svg`, heading(p, theme, title, small)), title, 'width="100%"')) : "";
   const join = (...parts) => parts.filter(Boolean).join("\n\n");
 
   for (const m of cfg.layout) {
@@ -526,7 +555,7 @@ export function render(cfg, data, assets) {
         const repos = pickRepos(data, o);
         if (!repos.length && o.empty === "hide") break; // appears by itself once there is a repo to show
         const cards = repos.length
-          ? repos.map((r) => `<a href="${r.url}">${img(put(`${m.id}/${r.name}.svg`, projectCard(p, theme, r)), r.name, 'width="49%"')}</a>`)
+          ? repos.map((r) => `<a href="${esc(r.url)}">${img(put(`${m.id}/${r.name}.svg`, projectCard(p, theme, r)), r.name, 'width="49%"')}</a>`)
           : [img(put(`${m.id}/none.svg`, placeholderCard(p, theme, "NO PUBLIC PROJECTS YET", 430, 132)), "No public projects yet", 'width="49%"')];
         blocks.push(join(headingBlock(m, o.title), `<p>\n${cards.join("\n")}\n</p>`));
         break;
@@ -535,18 +564,18 @@ export function render(cfg, data, assets) {
         const rels = pickReleases(data, o);
         if (!rels.length && o.empty === "hide") break; // appears by itself with the first public release
         const cards = rels.length
-          ? rels.map((r) => `<a href="${r.url}">${img(put(`${m.id}/${r.repo}.svg`, releaseCard(p, theme, r)), `${r.repo} ${r.tag}`, 'width="49%"')}</a>`)
+          ? rels.map((r) => `<a href="${esc(r.url)}">${img(put(`${m.id}/${r.repo}.svg`, releaseCard(p, theme, r)), `${r.repo} ${r.tag}`, 'width="49%"')}</a>`)
           : [img(put(`${m.id}/none.svg`, placeholderCard(p, theme, "NO RELEASES YET")), "No releases yet", 'width="49%"')];
         blocks.push(join(headingBlock(m, o.title), `<p>\n${cards.join("\n")}\n</p>`));
         break;
       }
       case "stats":
         blocks.push(join(headingBlock(m, o.title),
-          img(put(`${m.id}/stats.svg`, statsCard(p, theme, statsFrom(data), o.languages)), "GitHub stats", 'width="100%"')));
+          para(img(put(`${m.id}/stats.svg`, statsCard(p, theme, statsFrom(data), o.languages)), "GitHub stats", 'width="100%"'))));
         break;
       case "activity":
         blocks.push(join(headingBlock(m, o.title),
-          img(put(`${m.id}/activity.svg`, activityCard(p, theme, data.calendar, o.weeks)), "Contribution activity", 'width="100%"')));
+          para(img(put(`${m.id}/activity.svg`, activityCard(p, theme, data.calendar, o.weeks)), "Contribution activity", 'width="100%"'))));
         break;
       case "socials": {
         const links = splitPairs(o.items);
@@ -559,7 +588,7 @@ export function render(cfg, data, assets) {
         break;
       }
       case "divider":
-        blocks.push(img(put(`${m.id}/divider.svg`, dividerSvg(theme)), "", 'width="100%"'));
+        blocks.push(para(img(put(`${m.id}/divider.svg`, dividerSvg(theme)), "", 'width="100%"')));
         break;
     }
   }

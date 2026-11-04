@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Only files from this site; images may be data: URLs (the rendered SVGs). -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Profile Editor</title>
 <link rel="stylesheet" href="editor.css">
 </head>
@@ -33,7 +36,9 @@
   <section class="panel" id="options" aria-label="Options"></section>
   <section class="preview" id="preview" aria-label="Preview">
     <div class="status" id="status"></div>
-    <article class="readme" id="readme"></article>
+    <!-- sandbox without allow-scripts: nothing in the preview can run code.
+         allow-same-origin only lets the editor keep the scroll position. -->
+    <iframe id="frame" title="README preview" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
   </section>
 </main>
 

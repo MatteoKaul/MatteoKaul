@@ -4,12 +4,12 @@
   <img src="assets/gen/banner/banner.svg" alt="MATREXX" width="100%" />
 </p>
 
-<img src="assets/gen/about/heading.svg" alt="ABOUT" width="100%" />
+<p><img src="assets/gen/about/heading.svg" alt="ABOUT" width="100%" /></p>
 
 Student of **Applied Computer Science**, based in Germany.  
 Building things, learning across the stack.
 
-<img src="assets/gen/icons/cat-languages.svg" alt="LANGUAGES" width="100%" />
+<p><img src="assets/gen/icons/cat-languages.svg" alt="LANGUAGES" width="100%" /></p>
 
 <p>
   <img src="assets/gen/tiles/c.svg" alt="C" height="100" />
@@ -19,7 +19,7 @@ Building things, learning across the stack.
   <img src="assets/gen/tiles/python.svg" alt="PYTHON" height="100" />
 </p>
 
-<img src="assets/gen/icons/cat-os.svg" alt="OPERATING SYSTEMS" width="100%" />
+<p><img src="assets/gen/icons/cat-os.svg" alt="OPERATING SYSTEMS" width="100%" /></p>
 
 <p>
   <img src="assets/gen/tiles/macos.svg" alt="MACOS" height="100" />
@@ -29,42 +29,42 @@ Building things, learning across the stack.
   <img src="assets/gen/tiles/raspberrypi.svg" alt="PI OS" height="100" />
 </p>
 
-<img src="assets/gen/icons/cat-homelab.svg" alt="HOMELAB" width="100%" />
+<p><img src="assets/gen/icons/cat-homelab.svg" alt="HOMELAB" width="100%" /></p>
 
 <p>
   <img src="assets/gen/tiles/truenas.svg" alt="TRUENAS" height="100" />
 </p>
 
-<img src="assets/gen/icons/cat-devops.svg" alt="CONTAINERS &amp; DEVOPS" width="100%" />
+<p><img src="assets/gen/icons/cat-devops.svg" alt="CONTAINERS &amp; DEVOPS" width="100%" /></p>
 
 <p>
   <img src="assets/gen/tiles/docker.svg" alt="DOCKER" height="100" />
 </p>
 
-<img src="assets/gen/icons/cat-network.svg" alt="NETWORKING" width="100%" />
+<p><img src="assets/gen/icons/cat-network.svg" alt="NETWORKING" width="100%" /></p>
 
 <p>
   <img src="assets/gen/tiles/wireguard.svg" alt="WIREGUARD" height="100" />
 </p>
 
-<img src="assets/gen/icons/cat-terminals.svg" alt="TERMINALS &amp; SHELLS" width="100%" />
+<p><img src="assets/gen/icons/cat-terminals.svg" alt="TERMINALS &amp; SHELLS" width="100%" /></p>
 
 <p>
   <img src="assets/gen/tiles/ghostty.svg" alt="GHOSTTY" height="100" />
 </p>
 
-<img src="assets/gen/icons/cat-ai.svg" alt="AI" width="100%" />
+<p><img src="assets/gen/icons/cat-ai.svg" alt="AI" width="100%" /></p>
 
 <p>
   <img src="assets/gen/tiles/claude.svg" alt="CLAUDE" height="100" />
 </p>
 
-<img src="assets/gen/icons/cat-gamedev.svg" alt="GAME DEV" width="100%" />
+<p><img src="assets/gen/icons/cat-gamedev.svg" alt="GAME DEV" width="100%" /></p>
 
 <p>
   <img src="assets/gen/tiles/godot.svg" alt="GODOT" height="100" />
 </p>
 
-<img src="assets/gen/stats/heading.svg" alt="STATS" width="100%" />
+<p><img src="assets/gen/stats/heading.svg" alt="STATS" width="100%" /></p>
 
-<img src="assets/gen/stats/stats.svg" alt="GitHub stats" width="100%" />
+<p><img src="assets/gen/stats/stats.svg" alt="GitHub stats" width="100%" /></p>

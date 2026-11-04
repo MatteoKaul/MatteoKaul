@@ -18,10 +18,21 @@ const h = (tag, attrs = {}, ...children) => {
     else if (v === true) el.setAttribute(k, "");
     else if (v !== false && v != null) el.setAttribute(k, v);
   }
-  el.append(...children.flat().filter((c) => c != null));
+  return fill(el, ...children);
+};
+/** Replace an element's children; nested arrays and null are allowed. */
+const fill = (el, ...children) => {
+  el.replaceChildren(...children.flat(Infinity).filter((c) => c != null && c !== false));
   return el;
 };
 const svgUrl = (svg) => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+
+// The editor's own headings are dot-matrix text from the same renderer.
+const UI_THEME = { ...R.resolve({}).theme, fg: "#ffffff" };
+const dotImg = (text, pitch, fill = "#ffffff") => state.fonts.led
+  ? h("img", { src: svgUrl(R.renderLabel(UI_THEME, state.fonts.led, text, { pitch, fill })), alt: text })
+  : text;
+const title = (text) => h("h2", {}, dotImg(text, 1.6, "#9a9a9a"));
 
 const EMPTY_DATA = { followers: 0, commits: 0, pinned: [], calendar: { total: 0, weeks: [] }, repos: [] };
 const state = {
@@ -39,6 +50,9 @@ async function load() {
   state.settings = R.parseSettings(await get("../settings.txt").then((r) => r.text()));
   state.githubData = await get("../data/github.json").then((r) => r.json()).catch(() => EMPTY_DATA);
   if (!state.githubData.repos?.length) $("#dataSource").value = "sample"; // nothing fetched yet: show a filled example
+  await font(cfg().theme.font);
+  await font("led");
+  fill($(".brand"), dotImg("PROFILE EDITOR", 2.4));
   setupGithubLink();
   renderAll();
 }
@@ -96,13 +110,13 @@ function renderModules() {
   };
   const hidden = c.modules.filter((m) => !shown.has(m.id));
   const typeSelect = h("select", {}, Object.entries(R.TYPES).map(([t, d]) => h("option", { value: t }, d.label)));
-  $("#modules").replaceChildren(
-    h("h2", {}, "Style"),
+  fill($("#modules"),
+    title("Style"),
     h("div", { class: `mod${state.selected === "theme" ? " sel" : ""}`, onclick: () => { state.selected = "theme"; renderModules(); renderOptions(); } },
       h("span", { class: "name" }, "Theme"), h("span", { class: "type" }, "colours, font")),
-    h("h2", {}, "Layout (drag to reorder)"),
+    title("Layout (drag to reorder)"),
     c.layout.map(item),
-    hidden.length ? [h("h2", {}, "Hidden"), hidden.map(item)] : null,
+    hidden.length ? [title("Hidden"), hidden.map(item)] : null,
     h("div", { class: "add" }, typeSelect, h("button", { onclick: () => addModule(typeSelect.value) }, "+ Add")));
 }
 
@@ -143,14 +157,14 @@ function deleteModule(id) {
 function renderOptions() {
   const c = cfg();
   if (state.selected === "theme") {
-    $("#options").replaceChildren(h("h2", {}, "Theme"),
+    fill($("#options"),title("Theme"),
       R.THEME_FIELDS.map((f) => field(f, c.theme[f.key], (v) => set(`theme.${f.key}`, v))));
     return;
   }
   const m = c.modules.find((x) => x.id === state.selected);
   if (!m) { state.selected = "theme"; return renderOptions(); }
-  $("#options").replaceChildren(
-    h("h2", {}, `${m.id} · ${R.TYPES[m.type].label}`),
+  fill($("#options"),
+    title(`${m.id} - ${R.TYPES[m.type].label}`),
     h("p", { class: "help" }, R.TYPES[m.type].help),
     R.TYPES[m.type].fields.map((f) => field(f, m.opt[f.key], (v) => set(`${m.id}.${f.key}`, v), m)),
     m.type === "banner" ? imageUpload(m) : null,
@@ -214,7 +228,7 @@ function linkEditor(f, value, onChange) {
   const keys = Object.keys(state.catalog.icons).sort((a, b) =>
     (state.catalog.icons[b].category === "social") - (state.catalog.icons[a].category === "social") || a.localeCompare(b));
   const list = h("div", {});
-  const draw = () => list.replaceChildren(...rows.map((row, i) => h("div", { class: "link-row" },
+  const draw = () => fill(list, rows.map((row, i) => h("div", { class: "link-row" },
     h("select", { onchange: (e) => { row[0] = e.target.value; save(); } }, keys.map((k) => h("option", { value: k, selected: k === row[0] }, k))),
     h("input", { type: "text", value: row[1], placeholder: "https://...", oninput: (e) => { row[1] = e.target.value; save(); } }),
     h("button", { onclick: () => { rows.splice(i, 1); save(); draw(); } }, "×"))));
@@ -269,40 +283,37 @@ function iconEditor(m) {
     set(key("order"), order.join(", ")); refresh();
   };
 
-  const boxes = groups.map(([cat, keys]) => {
+  // Empty categories added with "+ Category" stay as drop targets until used.
+  state.extraCats = (state.extraCats || []).filter((c) => !groups.some(([g]) => g === c));
+  const shown = [...groups, ...state.extraCats.map((c) => [c, []])];
+
+  const boxes = shown.map(([cat, keys]) => {
     const box = h("div", { class: "cat" },
       h("div", { class: "cat-head" },
-        h("button", { title: "Move category up", onclick: () => moveCat(cat, -1) }, "↑"),
-        h("button", { title: "Move category down", onclick: () => moveCat(cat, 1) }, "↓"),
-        h("input", { type: "text", value: titles[cat] || catalog.categories[cat] || cat.toUpperCase(),
+        h("button", { class: "icon-btn", title: "Move category up", onclick: () => moveCat(cat, -1) }, "↑"),
+        h("button", { class: "icon-btn", title: "Move category down", onclick: () => moveCat(cat, 1) }, "↓"),
+        h("input", { type: "text", value: titles[cat] || catalog.categories[cat] || cat.toUpperCase(), title: "Heading shown in the README",
           onchange: (e) => { titles[cat] = e.target.value === catalog.categories[cat] ? "" : e.target.value; saveTitles(); } }),
         h("small", {}, cat)),
-      h("div", { class: "chips" }, keys.map((k) => {
+      h("div", { class: "chips" }, keys.length ? keys.map((k) => {
         const chip = h("span", { class: `chip${move[k] ? " moved" : ""}`, draggable: true,
-          title: move[k] ? `moved from ${catalog.icons[k].category}` : catalog.icons[k].category },
+          title: move[k] ? `moved here from ${catalog.icons[k].category}` : `drag to reorder or move`},
           k, h("button", { title: "Remove", onclick: () => { delete move[k]; saveMove(); saveItems(items.filter((x) => x !== k)); refresh(); } }, "×"));
         chip.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/icon", k));
         chip.addEventListener("dragover", allowDrop(chip));
         chip.addEventListener("dragleave", () => chip.classList.remove("dragover"));
         chip.addEventListener("drop", (e) => { e.stopPropagation(); dropChip(chip, cat, k)(e); });
         return chip;
-      })));
+      }) : h("span", { class: "help" }, "Drop icons here")));
     box.addEventListener("dragover", allowDrop(box));
     box.addEventListener("dragleave", () => box.classList.remove("dragover"));
     box.addEventListener("drop", dropChip(box, cat));
     return box;
   });
 
-  // Empty drop targets for every other category, so icons can be moved there.
-  const used = new Set(groups.map(([c]) => c));
-  const others = Object.keys(catalog.categories).filter((c) => !used.has(c));
-  const moveTarget = h("select", { onchange: (e) => e.target.value && (e.target.value = "") },
-    h("option", { value: "" }, "drop an icon here to move it to…"), others.map((c) => h("option", { value: c }, catalog.categories[c])));
-  const targetBox = h("div", { class: "cat" }, h("div", { class: "cat-head" }, moveTarget));
-  targetBox.addEventListener("dragover", allowDrop(targetBox));
-  targetBox.addEventListener("dragleave", () => targetBox.classList.remove("dragover"));
-  targetBox.addEventListener("drop", (e) => { if (moveTarget.selectedIndex > 0 || moveTarget.value) dropChip(targetBox, moveTarget.value)(e); });
-  moveTarget.onchange = null;
+  const unused = Object.keys(catalog.categories).filter((c) => !shown.some(([s]) => s === c));
+  const addCat = h("select", { onchange: (e) => { state.extraCats.push(e.target.value); refresh(); } },
+    h("option", { value: "" }, "+ Category as drop target…"), unused.map((c) => h("option", { value: c }, catalog.categories[c])));
 
   // Catalog picker: click an icon to show / hide it.
   const theme = cfg().theme, fontData = state.fonts[theme.font];
@@ -314,7 +325,7 @@ function iconEditor(m) {
   const picker = h("div", { class: "picker" });
   function drawPicker() {
     const q = state.iconFilter.toLowerCase();
-    picker.replaceChildren(...Object.entries(catalog.icons)
+    fill(picker, Object.entries(catalog.icons)
       .filter(([k, ic]) => (!state.iconCategory || ic.category === state.iconCategory) &&
         (!q || k.includes(q) || ic.label.toLowerCase().includes(q)))
       .map(([k, ic]) => h("button", { class: `pick${items.includes(k) ? " on" : ""}`, title: `${k} (${catalog.categories[ic.category]})`,
@@ -328,10 +339,10 @@ function iconEditor(m) {
 
   return h("div", {},
     style,
-    h("h2", {}, "Shown icons by category"),
+    title("Shown icons by category"),
     h("p", { class: "help" }, "Drag icons to reorder them or into another category. Only categories with at least one icon are shown."),
-    boxes, others.length ? targetBox : null,
-    h("h2", {}, "Catalog"),
+    boxes, unused.length ? addCat : null,
+    title("Catalog"),
     h("div", { class: "picker-tools" }, search, catSelect),
     picker);
 }
@@ -351,6 +362,22 @@ function markdown(md) {
   }).join("\n");
 }
 
+// The README is shown in a sandboxed iframe (no scripts), styled like github.com.
+const PREVIEW_CSS = `
+  body { margin: 0; padding: 24px; font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; }
+  body.dark { background: #0d1117; color: #e6edf3; } body.light { background: #fff; color: #1f2328; }
+  .readme { max-width: 830px; margin: 0 auto; border: 1px solid #30363d; border-radius: 6px; padding: 32px; }
+  .light .readme { border-color: #d0d7de; }
+  p { margin: 0 0 16px; } img { max-width: 100%; vertical-align: middle; } a { color: #4493f8; }
+  code { background: rgba(110,118,129,.4); padding: .2em .4em; border-radius: 6px; font-size: 85%; }`;
+
+function showPreview(html) {
+  const frame = $("#frame"), y = frame.contentWindow?.scrollY || 0;
+  frame.srcdoc = `<!doctype html><meta charset="utf-8"><base target="_blank"><style>${PREVIEW_CSS}</style>` +
+    `<body class="${$("#previewMode").value}"><article class="readme">${html}</article></body>`;
+  frame.onload = () => frame.contentWindow.scrollTo(0, y); // keep the scroll position while editing
+}
+
 async function renderPreview() {
   const status = $("#status");
   try {
@@ -361,7 +388,7 @@ async function renderPreview() {
     const { files, readme } = R.render(c, data, { font: fontData, catalog: state.catalog, images: state.images });
     const html = markdown(readme.replace(/^<!--.*?-->\n*/s, ""))
       .replace(/src="(assets\/gen\/[^"]+)"/g, (_, path) => `src="${svgUrl(files[path])}"`);
-    $("#readme").innerHTML = html;
+    showPreview(html);
     status.className = "status";
     status.textContent = `${Object.keys(files).length} images · ${$("#dataSource").value === "sample" ? "sample data" : "GitHub data"}`;
   } catch (err) {
@@ -395,7 +422,6 @@ $("#importFile").onchange = async (e) => {
   if (f) { state.settings = R.parseSettings(await f.text()); state.selected = "theme"; renderAll(); }
 };
 $("#dataSource").onchange = renderPreview;
-$("#previewMode").onchange = (e) => { $("#preview").className = `preview ${e.target.value}`; };
-$("#preview").className = "preview dark";
+$("#previewMode").onchange = renderPreview;
 
 load().catch((err) => { $("#status").className = "status error"; $("#status").textContent = `Could not load: ${err.message}`; });
