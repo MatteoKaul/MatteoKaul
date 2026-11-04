@@ -77,7 +77,14 @@ function setImage(file, bytes) {
 
 // ---------------------------------------------------------------- helpers --
 
-const cfg = () => R.resolve(state.settings);
+// Settings are validated by resolve(). While a value is half-typed (e.g. a
+// colour "#ff") the panels keep working with the last valid config and the
+// status line shows what is wrong.
+let lastValid = R.resolve({});
+function cfg() {
+  try { lastValid = R.resolve(state.settings); } catch { /* reported by renderPreview */ }
+  return lastValid;
+}
 const layoutIds = () => cfg().layout.map((m) => m.id);
 function setLayout(ids) { state.settings.layout = ids.join(", "); changed(); }
 function set(key, value) {
@@ -85,10 +92,9 @@ function set(key, value) {
   changed();
 }
 let timer;
-function changed({ panels = false } = {}) {
+function changed() {
   clearTimeout(timer);
   timer = setTimeout(renderPreview, 120);
-  if (panels) { renderModules(); renderOptions(); }
 }
 function renderAll() { renderModules(); renderOptions(); renderPreview(); }
 
@@ -381,7 +387,7 @@ function showPreview(html) {
 async function renderPreview() {
   const status = $("#status");
   try {
-    const c = cfg();
+    const c = R.resolve(state.settings); // throws on invalid values -> shown in the status line
     const fontData = await font(c.theme.font);
     await Promise.all(c.layout.filter((m) => m.type === "banner").map((m) => image(m.opt.image)));
     const data = $("#dataSource").value === "sample" ? R.SAMPLE_DATA : state.githubData;

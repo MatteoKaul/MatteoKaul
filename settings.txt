@@ -7,8 +7,7 @@
 layout = banner, about, icons, projects, releases, stats
 
 # ---- theme ----
-# Dot font from fonts/<name>.json
-# Options: led
+# Dot font: the name of a file in fonts/ (fonts/<name>.json)
 theme.font = led
 # circle = LED look, square = pixel look, rounded = in between
 # Options: circle | square | rounded
@@ -142,3 +141,4 @@ socials.size = 72
 
 # ---- divider: Divider (hidden, not in layout) ----
 # A dotted line
+divider.type = divider

@@ -37,18 +37,31 @@ Done (branch `claude/clever-feynman-cj0nr1`, not merged to `main` yet):
 - Python generator replaced by a single JavaScript renderer (Node + browser)
 - One workflow (`Update profile`) for fetch + build + commit
 - Graphical editor (`editor/`) with drag & drop layout, icon picker, live preview
+- Docs: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (files, settings, modules, editor, security)
 
 ## Open
 
-- [ ] Verify the editor and all modules in a real browser (Chromium screenshots)
-- [ ] Editor visual design in the profile style
-- [ ] Documentation pass (README for the repo itself lives in docs/, the root README is the profile)
-- [ ] Code review / optimisation
-- [ ] Security audit (editor: XSS via settings values; workflow permissions)
-- [ ] First real workflow run on `main` (never run yet: API access is blocked
-      from the dev container, so fetch.mjs is untested against the live API)
-- [ ] Owner to do: merge the branch, enable workflow write permissions,
-      optionally enable GitHub Pages for the editor
+- [ ] First real workflow run on `main`. `fetch.mjs` is untested against the
+      live API (GitHub API is blocked in the dev container); check the
+      Actions log after merging. Everything else is tested with sample data
+      in Node and Chromium.
+- [ ] Owner: merge the branch, enable *Settings → Actions → General →
+      Workflow permissions → Read and write*, optionally enable GitHub Pages
+      (branch `main`, root) to use the editor online.
+- [ ] Optional: pin workflow actions to commit SHAs.
+- [ ] Optional ideas: more dot fonts, a "now playing"/"currently" text
+      module, light-theme variant of the default colours.
+
+## Done in the last session (checked)
+
+- Editor verified in Chromium: layout drag & drop, icon editor, live preview,
+  invalid input handling, import/export
+- Editor design in the profile style (dot-matrix headings from render.mjs)
+- Security audit + fixes: option validation (colours, numbers, selects, file
+  names, module ids, category names, link schemes), XML escaping, sandboxed
+  preview iframe + CSP, XSS test with a hostile settings file
+- Fixed: "#" inside values was treated as a comment (colours, "C#")
+- Documentation: docs/ARCHITECTURE.md
 
 ## Decisions
 

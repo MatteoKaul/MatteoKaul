@@ -17,8 +17,8 @@
 
 // Theme options, written as "theme.<key>" in settings.txt.
 export const THEME_FIELDS = [
-  { key: "font", label: "Font", type: "select", options: ["led"], default: "led",
-    help: "Dot font from fonts/<name>.json" },
+  { key: "font", label: "Font", type: "name", default: "led",
+    help: "Dot font: the name of a file in fonts/ (fonts/<name>.json)" },
   { key: "shape", label: "Dot shape", type: "select", options: ["circle", "square", "rounded"], default: "circle",
     help: "circle = LED look, square = pixel look, rounded = in between" },
   { key: "dot", label: "Dot size", type: "number", min: 0.2, max: 0.5, step: 0.01, default: 0.39,
@@ -140,11 +140,16 @@ export const CARD_W = 880; // width of headings and full-width cards
 
 // ---------------------------------------------------------- settings.txt --
 
-/** "key = value" lines -> {key: value}. "#" starts a comment, "\n" in a value is a line break. */
+/**
+ * "key = value" lines -> {key: value}. Lines starting with "#" are comments
+ * (only whole lines, so values like "#ffffff" or "C#" work), "\n" in a value
+ * is a line break.
+ */
 export function parseSettings(text) {
   const settings = {};
   for (const raw of text.split(/\r?\n/)) {
-    const line = raw.replace(/(^|\s)#.*$/, "").trim(); // "#" only starts a comment at line start or after a space
+    const line = raw.trim();
+    if (line.startsWith("#")) continue;
     const eq = line.indexOf("=");
     if (eq > 0) settings[line.slice(0, eq).trim()] = line.slice(eq + 1).trim().replace(/\\n/g, "\n");
   }
@@ -173,7 +178,8 @@ export function writeSettings(settings, catalog) {
   for (const m of ordered) {
     const hidden = cfg.layout.includes(m) ? "" : " (hidden, not in layout)";
     out.push("", comment(`---- ${m.id}: ${TYPES[m.type].label}${hidden} ----\n${TYPES[m.type].help}`));
-    if (m.id !== m.type && TYPE_ALIASES[m.id] !== m.type) out.push(`${m.id}.type = ${m.type}`);
+    // modules without options need the type line, or a hidden one would vanish
+    if ((m.id !== m.type && TYPE_ALIASES[m.id] !== m.type) || !TYPES[m.type].fields.length) out.push(`${m.id}.type = ${m.type}`);
     for (const f of TYPES[m.type].fields) {
       if (f.type === "icons" && catalog) {
         out.push(comment(`${f.help}\nAvailable, by category:\n` + Object.keys(catalog.categories).map((c) =>
@@ -224,6 +230,8 @@ function convert(field, value, name) {
       return /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : fail("use a hex colour like #ffffff");
     case "select":
       return field.options.includes(value) ? value : fail(`use one of ${field.options.join(", ")}`);
+    case "name": // a plain file name without extension, e.g. a font in fonts/
+      return /^[\w-]+$/.test(value) ? value : fail("use a plain name (letters, digits, - and _)");
     case "file": // a plain file name inside assets/src, no paths
       return value === "none" || /^[\w-]+(\.[\w-]+)*\.(png|jpe?g|webp)$/i.test(value) ? value : fail("use a png/jpg/webp file name from assets/src, or none");
     default:
@@ -500,6 +508,9 @@ export function iconGroups(opt, catalog) {
   const unknown = items.filter((k) => !catalog.icons[k]);
   if (unknown.length) throw new Error(`icons: unknown icon(s) ${unknown.join(", ")}`);
   const move = Object.fromEntries(splitPairs(opt.move));
+  // category keys become file names (cat-<key>.svg), custom ones are allowed
+  const badCat = [...splitList(opt.order), ...Object.values(move)].filter((c) => !/^[\w-]+$/.test(c));
+  if (badCat.length) throw new Error(`icons: invalid category name(s) ${badCat.join(", ")}`);
   const order = [...new Set([...splitList(opt.order), ...Object.keys(catalog.categories), ...Object.values(move)])];
   return order.map((cat) => [cat, items.filter((k) => (move[k] || catalog.icons[k].category) === cat)])
     .filter(([, keys]) => keys.length);
@@ -581,6 +592,8 @@ export function render(cfg, data, assets) {
         const links = splitPairs(o.items);
         const bad = links.filter(([k]) => !catalog.icons[k]).map(([k]) => k);
         if (bad.length) throw new Error(`${m.id}.items: unknown icon(s) ${bad.join(", ")}`);
+        const badUrl = links.filter(([, url]) => !/^(https?:\/\/|mailto:)/i.test(url)).map(([k]) => k);
+        if (badUrl.length) throw new Error(`${m.id}.items: links must start with https://, http:// or mailto: (${badUrl.join(", ")})`);
         if (!links.length) break;
         const tiles = links.map(([k, url]) =>
           `  <a href="${esc(url)}">${img(put(`tiles/${k}.svg`, tile(p, theme, catalog.icons[k])), catalog.icons[k].label, `height="${o.size}"`)}</a>`);
