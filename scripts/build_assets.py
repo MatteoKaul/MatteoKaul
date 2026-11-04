@@ -3,16 +3,17 @@
     pip install pillow            # only needed for the banner
     python scripts/build_assets.py
     python scripts/build_assets.py --title "LUMI CODE"   # override settings.txt
+    python scripts/build_assets.py --list                # show available icons
 
 Writes:
     assets/banner.jpg           banner_title from settings.txt on assets/src/background.webp
     assets/headings/<name>.svg  black section bars with dot-matrix text
-    assets/icons/<name>.svg     black tiles: white logo + dot-matrix label
-    README.md                   icon tile height set to icon_size from settings.txt
+    assets/icons/<key>.svg      black tiles for the icons listed in settings.txt
+    README.md                   icon rows between the <!-- icons:... --> markers
 
-Logo shapes come from scripts/icons.json (24x24 SVG paths, taken from the
-Simple Icons project; the Windows logo is hand-drawn). To add a tile, add its
-path there and an entry to TILES below.
+Icons come from scripts/icons.json: key -> label, group and the logo as SVG
+markup in a 24x24 box (mostly paths from the Simple Icons project; Windows,
+C# and SQL are hand-drawn). To add an icon, add an entry there.
 
 Only needed when changing the design. assets/stats.svg is made by stats.py.
 """
@@ -35,14 +36,11 @@ HEADINGS = {
     "stats": "STATS",
 }
 
-# (file name / key in icons.json, label under the logo)
-TILES = [
-    ("c", "C"), ("javascript", "JAVASCRIPT"), ("typescript", "TYPESCRIPT"),
-    ("openjdk", "JAVA"), ("python", "PYTHON"),
-    ("apple", "MACOS"), ("cachyos", "CACHYOS"), ("windows", "WINDOWS"),
-    ("ubuntu", "UBUNTU"), ("raspberrypi", "PI OS"), ("truenas", "TRUENAS"),
-    ("docker", "DOCKER"), ("git", "GIT"), ("cmake", "CMAKE"),
-]
+ICONS = json.loads((Path(__file__).parent / "icons.json").read_text())
+
+# README sections filled with icon rows; each name is a settings.txt key and
+# a marker pair <!-- icons:NAME --> ... <!-- /icons:NAME --> in README.md.
+ICON_SECTIONS = ("languages", "systems")
 
 
 def read_settings(path=SETTINGS):
@@ -68,8 +66,8 @@ def heading(label):
     return svg(width, height, f'<rect width="{width}" height="{height}" rx="10" fill="#000"/>{text}')
 
 
-def tile(path, label):
-    """168x132 tile: logo (24x24 path scaled 2x) on top, label centred below.
+def tile(logo, label):
+    """168x132 tile: logo (24x24 SVG markup scaled 2x) on top, label centred below.
     Long labels get a smaller pitch so they always fit with 10px margin."""
     width, height = 168, 132
     _, unit_w, _ = layout(label, 1)  # width at pitch 1 scales linearly
@@ -79,7 +77,7 @@ def tile(path, label):
     text, _, _ = svg_text(label, (width - w - 2 * r) / 2, 112 - (h + 2 * r) / 2, pitch, r, "#e0e0e0")
     return svg(width, height,
                f'<rect x=".5" y=".5" width="{width - 1}" height="{height - 1}" rx="12" fill="#000" stroke="#2a2a2a"/>'
-               f'<g transform="translate({(width - 48) / 2} 22) scale(2)" fill="#fff"><path d="{path}"/></g>{text}')
+               f'<g transform="translate({(width - 48) / 2} 22) scale(2)" fill="#fff">{logo}</g>{text}')
 
 
 def banner(title, shadow_pct=60):
@@ -126,36 +124,66 @@ def banner(title, shadow_pct=60):
     img.resize((W, H), Image.LANCZOS).save(ASSETS / "banner.jpg", quality=92)
 
 
-def set_icon_size(height):
-    """Set height="..." on every icon tile <img> in README.md (also the
-    commented-out ones), so the tile size is controlled from settings.txt."""
+def icon_keys(settings, section):
+    """Comma separated icon keys of one settings entry, validated."""
+    keys = [k.strip().lower() for k in settings.get(section, "").split(",") if k.strip()]
+    unknown = [k for k in keys if k not in ICONS]
+    if unknown:
+        raise SystemExit(f"{section}: unknown icons {unknown}; see --list")
+    return keys
+
+
+def update_readme(sections, height):
+    """Rewrite the icon rows between the markers in README.md."""
     readme = ROOT / "README.md"
-    text = re.sub(r'(<img src="assets/icons/[^"]+" alt="[^"]*" height=")\d+(")',
-                  rf"\g<1>{height}\2", readme.read_text())
+    text = readme.read_text()
+    for name, keys in sections.items():
+        imgs = "\n".join(f'  <img src="assets/icons/{k}.svg" alt="{ICONS[k]["label"]}" height="{height}" />'
+                         for k in keys)
+        block = f"<!-- icons:{name} -->\n<p>\n{imgs}\n</p>\n<!-- /icons:{name} -->"
+        pattern = rf"<!-- icons:{name} -->.*?<!-- /icons:{name} -->"
+        if not re.search(pattern, text, flags=re.S):
+            raise SystemExit(f"README.md: markers for '{name}' not found")
+        text = re.sub(pattern, lambda _: block, text, flags=re.S)
     readme.write_text(text)
+
+
+def list_icons():
+    for group in ICON_SECTIONS:
+        print(f"{group}: " + ", ".join(k for k, v in ICONS.items() if v["group"] == group))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--title", help="banner text (default: banner_title in settings.txt)")
+    parser.add_argument("--list", action="store_true", help="list available icon keys and exit")
     args = parser.parse_args()
+    if args.list:
+        return list_icons()
+
     settings = read_settings()
     title = args.title or settings.get("banner_title", "MATREXX")
     shadow_pct = int(settings.get("banner_shadow", 60))
     icon_size = int(settings.get("icon_size", 100))
+    sections = {name: icon_keys(settings, name) for name in ICON_SECTIONS}
 
     (ASSETS / "headings").mkdir(parents=True, exist_ok=True)
-    (ASSETS / "icons").mkdir(parents=True, exist_ok=True)
     for name, label in HEADINGS.items():
         (ASSETS / "headings" / f"{name}.svg").write_text(heading(label))
 
-    paths = json.loads((Path(__file__).parent / "icons.json").read_text())
-    for name, label in TILES:
-        (ASSETS / "icons" / f"{name}.svg").write_text(tile(paths[name], label))
+    # Only the enabled tiles are kept in assets/icons; stale ones are removed.
+    icon_dir = ASSETS / "icons"
+    icon_dir.mkdir(parents=True, exist_ok=True)
+    enabled = {k for keys in sections.values() for k in keys}
+    for old in icon_dir.glob("*.svg"):
+        if old.stem not in enabled:
+            old.unlink()
+    for key in enabled:
+        (icon_dir / f"{key}.svg").write_text(tile(ICONS[key]["svg"], ICONS[key]["label"]))
 
-    set_icon_size(icon_size)
+    update_readme(sections, icon_size)
     banner(title, shadow_pct)
-    print(f"assets rebuilt, banner: {title}")
+    print(f"assets rebuilt, banner: {title}, icons: {sorted(enabled)}")
 
 
 if __name__ == "__main__":

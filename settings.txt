@@ -13,3 +13,17 @@ banner_shadow = 60
 # Display height of the language / system icon tiles in the README, in pixels.
 # Reference: 120 = large | 100 = medium (default) | 80 = small
 icon_size = 100
+
+# Icon tiles in the README, shown in the order given. Comma separated keys;
+# remove a key to hide it, add one to show it. Any key works in either list.
+# Full list: python scripts/build_assets.py --list
+#
+# Languages: c, cpp, csharp, java, javascript, typescript, python, sql, go,
+#   rust, kotlin, php, html, css, bash, swift, dart, lua, r, ruby, haskell,
+#   zig, scala
+# Systems & tools: macos, windows, linux, cachyos, archlinux, ubuntu, debian,
+#   fedora, raspberrypi, truenas, proxmox, docker, kubernetes, git, github,
+#   gitlab, cmake, nginx, mysql, postgresql, sqlite, mariadb, nodejs, react,
+#   arduino, neovim, vim, latex, android, godot, unity
+languages = c, javascript, typescript, java, python
+systems = macos, cachyos, windows, ubuntu, raspberrypi, truenas, docker
