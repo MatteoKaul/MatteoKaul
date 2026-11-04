@@ -16,9 +16,11 @@ Conversation language with the owner is German; everything in the repo is Englis
 ```
 settings.txt ──► scripts/build.mjs ──► README.md + assets/gen/*.svg
                      ▲    uses scripts/render.mjs + lib/ (all drawing, pure functions)
-data/github.json ────┘    written by scripts/fetch.mjs (GitHub GraphQL API)
+data/ ───────────────┘    written by scripts/fetch.mjs (GitHub, feeds) and live.mjs (Twitch)
 editor/  ── same render.mjs in the browser: live preview, exports settings.txt
 .github/workflows/profile.yml ── daily + on change: fetch, build, commit
+.github/workflows/live.yml    ── optional 10-min Twitch check (schedule commented out)
+tools/counter/server.mjs      ── optional self-hosted visitor counter
 ```
 
 Details for each file: see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -27,60 +29,54 @@ Details for each file: see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Done (branch `claude/clever-feynman-cj0nr1`, not merged to `main` yet):
 
-- Dot-matrix banner with configurable title, image, brightness, letter shadow
-- Icon catalog: 255 logos in 22 categories (`scripts/icons.json`), categories
-  appear automatically when at least one icon of them is enabled; category
-  overrides, order and headings configurable
-- Modules: banner, text, icons, projects, releases, stats, activity, socials, divider
-- Projects / releases hide themselves until there is data (`empty = hide`)
-- Theme: colours, dot shape, dot size, slant, corner radius, font file
-- Python generator replaced by a single JavaScript renderer (Node + browser)
-- One workflow (`Update profile`) for fetch + build + commit
-- Graphical editor (`editor/`) with drag & drop layout, icon picker, live preview
-- Icons in 1-4 columns (owner uses 2), optional full rows for large categories
-  and hiding of small ones; tile styles below / none / badge
-- Prepared but hidden: `links` (websites, several YouTube channels, Spotify,
-  Apple Music, itch.io, Steam, ...), `people`, `companies`, `employer`
-  (people cards with GitHub avatar, logo or initials), `activity`, `socials`, `divider`
-- Code split: scripts/lib/settings.mjs (schema, parsing, validation),
-  scripts/lib/draw.mjs (SVG), scripts/render.mjs (modules -> README)
+- Dot-matrix banner: configurable title, font, image, brightness, contrast,
+  tint, letter shadow; animated backgrounds (GIF / animated WebP play,
+  mp4/webm/mov are converted with ffmpeg to `data/media/`); title effects
+  type / flicker / pulse, blinking cursor, LED ticker (CSS, reduced-motion aware)
+- Icon catalog: 288 logos in 24 categories (`scripts/icons.json`) incl.
+  support/funding (Patreon, Ko-fi, Sponsors, PayPal, ...) and business
+  (company, shop, imprint, Gumroad, Shopify, Etsy)
+- Modules: banner, text, icons, projects, releases, stats, activity, socials,
+  people, now, timeline, feed, twitch, gists, code, guestbook, counter, divider
+- Projects / releases / feed / gists hide themselves until there is data
+- Theme: dark / light / auto (`<picture>`), palette auto from fg/bg +
+  contrast, colour presets in the editor, dot shape/size, slant, radius,
+  fonts `led` and `micro`
+- One workflow (`Update profile`) for fetch + Twitch + build + commit;
+  actions pinned to commit SHAs
+- Graphical editor (`editor/`) with drag & drop layout, icon picker, row
+  editors, presets, light/dark preview, background upload (GIF plays, video
+  first frame)
+- Prepared but hidden: `links`, `support`, `socials`, `people`, `companies`,
+  `employer`, `business`, `activity`, `divider`, `now`, `timeline`, `feed`,
+  `twitch`, `gists`, `code`, `guestbook`, `counter`
+- Tested offline: all modules with sample data in Chromium (dark, light,
+  auto, micro font, amber tint), video conversion, animations over time,
+  fetch.mjs / live.mjs against mocked GitHub, YouTube, RSS and Twitch
+  responses, counter server, editor (presets, rows, video upload)
 - Docs: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (files, settings, modules, editor, security)
 
 ## Open
 
-- [ ] First real workflow run on `main`. `fetch.mjs` is untested against the
-      live API (GitHub API is blocked in the dev container); check the
-      Actions log after merging. Everything else is tested with sample data
-      in Node and Chromium.
+- [ ] First real workflow run on `main`. `fetch.mjs` (GitHub GraphQL incl.
+      gists and guestbook, feeds, avatars, thumbnails) and `live.mjs` are only
+      tested against mocked responses (the APIs are blocked in the dev
+      container); check the Actions log after merging.
 - [ ] Owner: merge the branch, enable *Settings → Actions → General →
       Workflow permissions → Read and write*, optionally enable GitHub Pages
       (branch `main`, root) to use the editor online.
-- [ ] Optional: pin workflow actions to commit SHAs.
-- [ ] Avatar download (`gh:<login>` in people modules) is untested against
-      the live avatars.githubusercontent.com (blocked in the dev container).
-- [ ] Ideas proposed to the owner (not built): see "Ideas" below.
+- [ ] Owner, when wanted: Twitch secrets + live.yml schedule; guestbook
+      issue; counter server; real GIFs/videos in `assets/src` (the GIFs from
+      the chat arrived as still images, so animations were tested with
+      generated clips).
 
-## Ideas (proposed, not built)
+## Ideas (not built)
 
-- Now / status line ("currently: building X, learning Y"), updated by hand
-- Blog / video feed: latest posts or YouTube uploads from an RSS feed
-- Twitch live indicator (needs a Twitch API token as a secret)
-- Timeline: education / jobs / milestones as a dotted vertical line
-- Pinned gists or snippets, guestbook via issues, visitor counter (self-hosted)
-- Light-mode theme via <picture> sources (prefers-color-scheme)
-- Animated SVG (blinking cursor / scrolling LED ticker in the banner)
-- Second dot font (e.g. thin 3x5 or bold 7x9 for headings)
-
-## Done in the last session (checked)
-
-- Editor verified in Chromium: layout drag & drop, icon editor, live preview,
-  invalid input handling, import/export
-- Editor design in the profile style (dot-matrix headings from lib/draw.mjs)
-- Security audit + fixes: option validation (colours, numbers, selects, file
-  names, module ids, category names, link schemes), XML escaping, sandboxed
-  preview iframe + CSP, XSS test with a hostile settings file
-- Fixed: "#" inside values was treated as a comment (colours, "C#")
-- Documentation: docs/ARCHITECTURE.md
+- Spotify "now playing" / recently played (needs a Spotify refresh token secret)
+- WakaTime coding time per language (needs a WakaTime API key)
+- Steam: recently played games (public Steam Web API key)
+- Contribution "snake" in dots (SVG animation of the activity grid)
+- Per-module light/dark override, more fonts (e.g. a 7x9 bold heading font)
 
 ## Decisions
 
@@ -88,19 +84,28 @@ Done (branch `claude/clever-feynman-cj0nr1`, not merged to `main` yet):
   The banner is an SVG with the photo embedded (base64) and SVG filters for
   greyscale/brightness/shadow; no image libraries needed.
 - **Generated files only in `assets/gen/`**; it is wiped on every build.
-- **Releases/projects auto-hide** while empty (owner's request).
+- **Releases/projects auto-hide** while empty (owner's request); the same for feed and gists.
+- **Animated banners stay one SVG**: GIF / animated WebP are embedded as is
+  (browsers animate them inside SVG images, filters included); videos are
+  converted once to animated WebP because GitHub cannot embed repo videos.
+- **Light mode via `<picture>`**, the official GitHub way; images identical
+  in both modes (e.g. a kept banner) are not duplicated.
+- **Twitch every 10 min is opt-in** (commented schedule), so the Actions tab
+  stays quiet until the module is used.
+- **Guestbook moderation by 👍** of the owner, default on.
 - Settings stay a flat `key = value` text file so they can be edited on
   github.com directly; `node scripts/build.mjs --write-settings` rewrites it
   with all options and comments.
 - Icon logos come from the Simple Icons npm package (CC0); Windows, C#, SQL,
-  LinkedIn, email and website are hand-drawn because Simple Icons lacks them.
+  LinkedIn, email, website, company, shop and imprint are hand-drawn because
+  Simple Icons lacks them.
 
 ## Owner preferences (from the conversation)
 
-- Minimal, black/white, clean; dot font like the "CHAT" lettering of his stream overlay
+- Minimal, black/white, clean; dot font like the "CHAT" lettering of the owner's stream overlay
 - Banner title switchable: MATREXX, MATTEO, MATTEO KAUL, LUMI, LUMIEREZ, LUMI CODE
 - Shadow: subtle, following the letter shape (60 is good, 40 too weak)
-- Wants to understand and check everything himself: comment the code, keep it small
+- Wants to understand and check everything personally: comment the code, keep it small
 - Studies Applied Computer Science; languages C, JavaScript, TypeScript, Java, Python
 - Uses macOS, CachyOS, Windows, Ubuntu, Raspberry Pi OS, TrueNAS, Docker,
   WireGuard, Ghostty, Claude, Godot (Git and CMake known but hidden for now)

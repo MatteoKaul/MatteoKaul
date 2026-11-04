@@ -34,10 +34,20 @@ const dotImg = (text, pitch, fill = "#ffffff") => state.fonts.led
   : text;
 const title = (text) => h("h2", {}, dotImg(text, 1.6, "#9a9a9a"));
 
+// Colour presets for the theme panel (dark palette; light mode has its own colours).
+const PRESETS = {
+  Mono: { fg: "#ffffff", muted: "#cfcfcf", faint: "#7a7a7a", dim: "#2c2c2c", bg: "#000000", border: "#2a2a2a" },
+  Amber: { fg: "#ffb000", muted: "#d99a1e", faint: "#8a6420", dim: "#2e2410", bg: "#0a0700", border: "#3a2c10" },
+  Phosphor: { fg: "#39ff6a", muted: "#2fcf58", faint: "#1f7a37", dim: "#0f2a16", bg: "#020a04", border: "#123a1c" },
+  Ice: { fg: "#9fe8ff", muted: "#7cc4dc", faint: "#4a7686", dim: "#14262e", bg: "#02080b", border: "#1a3440" },
+  Red: { fg: "#ff3b30", muted: "#d9453c", faint: "#86302a", dim: "#2e1210", bg: "#0a0202", border: "#3a1612" },
+  Grey: { fg: "#d6d6d6", muted: "#a8a8a8", faint: "#6a6a6a", dim: "#262626", bg: "#121212", border: "#303030" },
+};
+
 const EMPTY_DATA = { followers: 0, commits: 0, pinned: [], calendar: { total: 0, weeks: [] }, repos: [] };
 const state = {
   settings: {},        // flat settings.txt content, the single source of truth
-  catalog: null, fonts: {}, images: {}, avatars: {}, githubData: EMPTY_DATA,
+  catalog: null, fonts: {}, images: {}, githubData: EMPTY_DATA,
   selected: "theme",   // "theme" or a module id
   iconFilter: "", iconCategory: "",
 };
@@ -48,38 +58,27 @@ async function load() {
   const get = (path) => fetch(path).then((r) => (r.ok ? r : Promise.reject(new Error(`${path}: ${r.status}`))));
   state.catalog = await get("../scripts/icons.json").then((r) => r.json());
   state.settings = R.parseSettings(await get("../settings.txt").then((r) => r.text()));
-  state.githubData = await get("../data/github.json").then((r) => r.json()).catch(() => EMPTY_DATA);
+  const json = (path, fallback) => get(path).then((r) => r.json()).catch(() => fallback);
+  state.githubData = { ...await json("../data/github.json", EMPTY_DATA),
+    feeds: await json("../data/feeds.json", {}), live: await json("../data/live.json", {}) };
   if (!state.githubData.repos?.length) $("#dataSource").value = "sample"; // nothing fetched yet: show a filled example
-  await font(cfg().theme.font);
-  await font("led");
+  await Promise.all(R.FONTS.map((f) => font(f).catch(() => null)));
   fill($(".brand"), dotImg("PROFILE EDITOR", 2.4));
   setupGithubLink();
   renderAll();
 }
 
 async function font(name) {
-  state.fonts[name] ??= await fetch(`../fonts/${name}.json`).then((r) => r.json());
+  state.fonts[name] ??= await fetch(`../fonts/${name}.json`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`fonts/${name}.json not found`))));
   return state.fonts[name];
 }
 
-async function image(file) {
-  if (!file || file === "none" || state.images[file]) return;
-  const res = await fetch(`../assets/src/${file}`);
-  if (!res.ok) return; // render() reports the missing file
-  setImage(file, new Uint8Array(await res.arrayBuffer()));
-}
-
-/** GitHub avatar saved by fetch.mjs as data/avatars/<login>.png or .jpg. */
-async function avatar(login) {
-  if (login in state.avatars) return;
-  state.avatars[login] = null; // also remembers "not found"
-  for (const ext of ["png", "jpg"]) {
-    const res = await fetch(`../data/avatars/${login}.${ext}`);
-    if (!res.ok) continue;
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    state.avatars[login] = { mime: R.imageSize(bytes).mime, base64: toBase64(bytes) };
-    return;
-  }
+/** A repo file (banner background, logo, avatar, thumbnail) for the preview; missing ones stay missing. */
+async function image(path) {
+  if (path in state.images) return;
+  state.images[path] = null; // also remembers "not found"
+  const res = await fetch(`../${path}`);
+  if (res.ok) setImage(path, new Uint8Array(await res.arrayBuffer()));
 }
 
 function toBase64(bytes) {
@@ -88,8 +87,8 @@ function toBase64(bytes) {
   return btoa(bin);
 }
 
-function setImage(file, bytes) {
-  state.images[file] = { ...R.imageSize(bytes), base64: toBase64(bytes) };
+function setImage(path, bytes) {
+  try { state.images[path] = { ...R.imageSize(bytes), base64: toBase64(bytes) }; } catch { state.images[path] = null; }
 }
 
 // ---------------------------------------------------------------- helpers --
@@ -180,8 +179,14 @@ function deleteModule(id) {
 function renderOptions() {
   const c = cfg();
   if (state.selected === "theme") {
-    fill($("#options"),title("Theme"),
-      R.THEME_FIELDS.map((f) => field(f, c.theme[f.key], (v) => set(`theme.${f.key}`, v))));
+    fill($("#options"), title("Theme"),
+      h("div", { class: "field" }, h("label", {}, "Presets"),
+        h("div", { class: "presets" }, Object.entries(PRESETS).map(([name, colours]) =>
+          h("button", { title: "Sets the colours below", style: `--a:${colours.fg};--b:${colours.bg}`,
+            onclick: () => { for (const [k, v] of Object.entries(colours)) state.settings[`theme.${k}`] = v; changed(); renderOptions(); } },
+          h("i", {}), name))),
+        h("div", { class: "help" }, "Starting points; every colour can be changed afterwards.")),
+      R.THEME_FIELDS.map((f) => field(f, state.settings[`theme.${f.key}`] ?? c.theme[f.key], (v) => set(`theme.${f.key}`, v))));
     return;
   }
   const m = c.modules.find((x) => x.id === state.selected);
@@ -218,6 +223,10 @@ function field(f, value, onChange, module) {
       input = h("select", { onchange: (e) => onChange(e.target.value) },
         f.options.map((o) => h("option", { value: o, selected: o === value }, o)));
       break;
+    case "name": // free name with suggestions (fonts)
+      input = h("div", {}, h("input", { type: "text", value, list: `list-${f.key}`, oninput: (e) => onChange(e.target.value) }),
+        h("datalist", { id: `list-${f.key}` }, (f.suggest || []).map((o) => h("option", { value: o }))));
+      break;
     case "toggle": // on/off switch
       input = h("label", { class: "switch" },
         h("input", { type: "checkbox", checked: value === "on", onchange: (e) => onChange(e.target.checked ? "on" : "off") }),
@@ -233,6 +242,8 @@ function field(f, value, onChange, module) {
       return linkEditor(f, value, onChange);
     case "people":
       return peopleEditor(f, value, onChange);
+    case "rows":
+      return linesEditor(f, value, onChange);
     default:
       input = h("input", { type: "text", value, oninput: (e) => onChange(e.target.value) });
   }
@@ -240,25 +251,45 @@ function field(f, value, onChange, module) {
 }
 
 function imageUpload(m) {
-  const file = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp",
+  const file = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime",
     onchange: async (e) => {
       const f = e.target.files[0];
       if (!f) return;
-      setImage(f.name, new Uint8Array(await f.arrayBuffer()));
-      set(`${m.id}.image`, f.name);
+      const name = f.name.replace(/[^\w.-]/g, "_");
+      try { // videos are converted by build.mjs; the preview shows their first frame
+        setImage(R.mediaPath(name), R.isVideo(name) ? await videoFrame(f) : new Uint8Array(await f.arrayBuffer()));
+      } catch (err) {
+        $("#status").className = "status error";
+        $("#status").textContent = `${f.name}: ${err.message} (the workflow can still convert it)`;
+        return;
+      }
+      set(`${m.id}.image`, name);
       renderOptions();
     } });
-  return h("div", { class: "field" }, h("label", {}, "Try another image"), file,
-    h("div", { class: "help" }, "Preview only: to use it, add the file to assets/src/ in the repo."));
+  return h("div", { class: "field" }, h("label", {}, "Try another background"), file,
+    h("div", { class: "help" }, "Preview only: to use it, add the file to assets/src/ in the repo. " +
+      "GIFs and animated WebPs play here; videos show their first frame (the workflow converts them)."));
+}
+
+/** First frame of a video file as PNG bytes. */
+async function videoFrame(file) {
+  const video = h("video", { muted: true, playsinline: true, src: URL.createObjectURL(file) });
+  await new Promise((ok, err) => { video.onloadeddata = ok; video.onerror = () => err(new Error("this browser cannot decode the video")); });
+  video.currentTime = Math.min(0.2, video.duration / 2); // frame 0 is often still empty
+  await new Promise((ok) => { video.onseeked = ok; });
+  const canvas = h("canvas", { width: video.videoWidth, height: video.videoHeight });
+  canvas.getContext("2d").drawImage(video, 0, 0);
+  const blob = await new Promise((ok) => canvas.toBlob(ok, "image/png"));
+  return new Uint8Array(await blob.arrayBuffer());
 }
 
 /**
- * Row editor used for socials and people: each row is a few text/select
+ * Row editor used for socials, people, now and timeline: each row is a few text/select
  * columns, saved back into the single-line settings format by `save`.
  */
-function rowEditor(f, rows, columns, save, blank, addLabel) {
+function rowEditor(f, rows, columns, save, blank, addLabel, wide = columns.length > 3) {
   const list = h("div", {});
-  const draw = () => fill(list, rows.map((row, i) => h("div", { class: `entry-row${columns.length > 3 ? " wide" : ""}`, style: `--cols:${columns.length}` },
+  const draw = () => fill(list, rows.map((row, i) => h("div", { class: `entry-row${wide ? " wide" : ""}`, style: `--cols:${columns.length}` },
     columns.map((col, c) => col.options
       ? h("select", { title: col.label, onchange: (e) => { row[c] = e.target.value; save(); } },
         col.options.map((o) => h("option", { value: o, selected: o === row[c] }, o)))
@@ -285,8 +316,15 @@ function linkEditor(f, value, onChange) {
 function peopleEditor(f, value, onChange) {
   const rows = R.splitPeople(value).map((e) => [e.name, e.role, e.url, e.image]);
   const save = () => onChange(rows.filter(([n]) => n).map((r) => r.join(" | ")).join(", "));
-  return rowEditor(f, rows, [{ label: "Name" }, { label: "Role" }, { label: "https://..." }, { label: "gh:login or icon" }],
+  return rowEditor(f, rows, [{ label: "Name" }, { label: "Role" }, { label: "https://..." }, { label: "gh:login, file:logo.png or icon" }],
     save, ["", "", "", ""], "+ Entry");
+}
+
+/** rows fields (now, timeline): one entry per line, columns separated by "|". */
+function linesEditor(f, value, onChange) {
+  const rows = R.splitRows(value, f.columns.length);
+  const save = () => onChange(rows.filter((r) => r.some(Boolean)).map((r) => r.join(" | ")).join("\n"));
+  return rowEditor(f, rows, f.columns.map((label) => ({ label })), save, f.columns.map(() => ""), "+ Line", f.columns.length > 2);
 }
 
 // ----------------------------------------------------------- icon editor --
@@ -434,14 +472,20 @@ async function renderPreview() {
   const status = $("#status");
   try {
     const c = R.resolve(state.settings); // throws on invalid values -> shown in the status line
-    const fontData = await font(c.theme.font);
-    await Promise.all([...c.layout.filter((m) => m.type === "banner").map((m) => image(m.opt.image)),
-      ...R.avatarLogins(c).map(avatar)]);
+    await Promise.all(R.neededFonts(c).map(font));
     const data = $("#dataSource").value === "sample" ? R.SAMPLE_DATA : state.githubData;
-    const avatars = Object.fromEntries(Object.entries(state.avatars).filter(([, v]) => v));
-    const { files, readme } = R.render(c, data, { font: fontData, catalog: state.catalog, images: state.images, avatars });
+    await Promise.all(R.neededImages(c, data).map(image));
+    const images = Object.fromEntries(Object.entries(state.images).filter(([, v]) => v));
+    const { files, readme } = R.render(c, data, { fonts: state.fonts, catalog: state.catalog, images });
+    const light = $("#previewMode").value === "light";
+    const counter = svgUrl(R.renderCounter(light && c.theme.mode !== "dark" ? c.light : c.theme, state.fonts[c.theme.font], 1234));
     const html = markdown(readme.replace(/^<!--.*?-->\n*/s, ""))
-      .replace(/src="(assets\/gen\/[^"]+)"/g, (_, path) => `src="${svgUrl(files[path])}"`);
+      // <picture>: GitHub picks by the viewer's theme, the preview by the Preview setting
+      .replace(/<picture><source media="\(prefers-color-scheme: light\)" srcset="([^"]+)" \/>(<img src=")[^"]+("[^>]*>)<\/picture>/g,
+        (tag, lightSrc, a, b) => (light ? a + lightSrc + b : tag.replace(/^<picture>.*?\/>|<\/picture>$/g, "")))
+      .replace(/src="(assets\/gen\/[^"]+)"/g, (_, path) => `src="${svgUrl(files[path])}"`)
+      // external images (the visitor counter) cannot load here: a sample instead
+      .replace(/src="https:\/\/[^"]*"/g, `src="${counter}"`);
     showPreview(html);
     status.className = "status";
     status.textContent = `${Object.keys(files).length} images · ${$("#dataSource").value === "sample" ? "sample data" : "GitHub data"}`;

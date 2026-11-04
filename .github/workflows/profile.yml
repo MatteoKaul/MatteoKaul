@@ -1,5 +1,6 @@
 # Updates everything generated in this repo and commits the result:
-#   scripts/fetch.mjs  GitHub data -> data/github.json
+#   scripts/fetch.mjs  GitHub data, feeds, avatars -> data/
+#   scripts/live.mjs   Twitch live status -> data/live.json (only with Twitch secrets)
 #   scripts/build.mjs  settings.txt + data -> README.md and assets/gen/
 #
 # Runs daily (stats, activity and releases change without a commit here),
@@ -33,10 +34,16 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # Pinned to exact commits (v4.3.1 / v4.4.0), so a changed tag cannot run other code.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
+
+      # Only needed to convert video banners (mp4/webm/mov) in assets/src.
+      - name: Install ffmpeg
+        if: hashFiles('assets/src/*.mp4', 'assets/src/*.webm', 'assets/src/*.mov') != ''
+        run: command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y ffmpeg)
 
       # The built-in token is enough: only public profile data is read.
       - name: Fetch GitHub data
@@ -44,6 +51,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_USER: ${{ github.repository_owner }}
         run: node scripts/fetch.mjs
+
+      # Optional: repository secrets TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET
+      # (see scripts/live.mjs); without them this step does nothing.
+      - name: Twitch live status
+        env:
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+        run: node scripts/live.mjs
 
       - name: Build README and images
         run: node scripts/build.mjs

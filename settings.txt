@@ -3,11 +3,14 @@
 # After a change on main, the Update profile workflow rebuilds README.md and the images.
 
 # Modules from top to bottom. Remove an id to hide that module (its options stay below).
-# Types: banner, text, icons, projects, releases, stats, activity, socials, people, divider. A new module: add an id here and "<id>.type = <type>".
+# Types: banner, text, icons, projects, releases, stats, activity, socials, people, now, timeline, feed, twitch, gists, code, guestbook, counter, divider. A new module: add an id here and "<id>.type = <type>".
 layout = banner, about, icons, projects, releases, stats
 
 # ---- theme ----
-# Dot font: the name of a file in fonts/ (fonts/<name>.json)
+# dark = dark colours below | light = the light colours | auto = both; GitHub shows the one matching the viewer's theme
+# Options: dark | light | auto
+theme.mode = dark
+# Dot font: the name of a file in fonts/ (fonts/<name>.json). led = 5x7 / 7x9 LED | micro = 3x5 small, 5x7 banner
 theme.font = led
 # circle = LED look, square = pixel look, rounded = in between
 # Options: circle | square | rounded
@@ -28,6 +31,23 @@ theme.dim = #2c2c2c
 theme.bg = #000000
 # Card outline
 theme.border = #2a2a2a
+# manual = use every colour as set | auto = only fg and bg (and light_fg / light_bg) are used, the others are mixed from them by contrast
+# Options: manual | auto
+theme.palette = manual
+# Only with palette = auto: how far labels, hints and borders stand out from the background. Reference: 40 = soft | 70 = default | 100 = hard
+theme.contrast = 70
+# Light mode (mode = light or auto): main text and logos
+theme.light_fg = #111111
+# Light mode: labels and secondary text
+theme.light_muted = #3d3d3d
+# Light mode: placeholders and hints
+theme.light_faint = #8a8a8a
+# Light mode: inactive dots
+theme.light_dim = #dadada
+# Light mode: background of all cards
+theme.light_bg = #ffffff
+# Light mode: card outline
+theme.light_border = #d0d7de
 # Rounding of cards and bars in px
 theme.radius = 12
 # Font for longer text (project descriptions); must be installed on the viewer's system
@@ -37,7 +57,10 @@ theme.text_font = ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
 # Big title on a background image
 # Letters A-Z and spaces; long titles shrink to fit. E.g. MATTEO KAUL, LUMI, LUMIEREZ, LUMI CODE
 banner.title = MATREXX
-# File in assets/src (png, jpg or webp), or none
+# theme = the theme font, or a font name for the banner only (micro has digits)
+banner.font = theme
+# File in assets/src, or none. Images: png, jpg, webp. Animated: gif, animated webp.
+# Videos (mp4, webm, mov) are turned into an animated webp by the workflow (needs ffmpeg locally)
 banner.image = background.webp
 # Used when image = none
 banner.color = #111111
@@ -45,8 +68,28 @@ banner.color = #111111
 banner.position = 30
 # Reference: 30 = dark | 42 = default | 70 = bright
 banner.brightness = 42
+# Reference: 90 = flat | 115 = default | 150 = punchy
+banner.contrast = 115
+# Colour of the photo's highlights; #ffffff = black and white, e.g. #ffb000 = amber
+banner.tint = #ffffff
 # Reference: 40 = barely visible | 60 = subtle (default) | 67 = stronger
 banner.shadow = 60
+# none | type = letters appear one by one, then clear | flicker = a few letters flicker like an old LED sign | pulse = slow breathing
+# Options: none | type | flicker | pulse
+banner.effect = none
+# A blinking dot cursor after the title
+banner.cursor = off
+# Scrolling LED line at the bottom of the banner, empty = off. E.g. NOW BUILDING: LUMI +++ LIVE ON TWITCH
+banner.ticker = 
+# Pixels per second
+banner.ticker_speed = 60
+# Only for videos: lower = smaller file
+banner.fps = 12
+# Only for videos: seconds used from the start of the clip (it loops)
+banner.duration = 4
+# Only with theme.mode = light or auto. keep = the banner stays dark | adapt = inverted photo, dark letters
+# Options: keep | adapt
+banner.light = keep
 
 # ---- about: Text ----
 # Free text (Markdown)
@@ -80,7 +123,9 @@ about.text = Student of **Applied Computer Science**, based in Germany.\nBuildin
 #   gamedev: godot, unity, blender
 #   hardware: arduino, esp32, esphome, platformio, nvidia, amd, intel
 #   apps: figma, obs, postman, jira, notion, obsidian, discord, steam
-#   social: twitch, youtube, linkedin, instagram, x, mastodon, bluesky, threads, reddit, tiktok, facebook, xing, telegram, signal, whatsapp, spotify, soundcloud, kofi, patreon, buymeacoffee, devto, medium, stackoverflow, leetcode, kaggle, orcid, scholar, itchio, artstation, behance, dribbble, pinterest, email, website, applemusic, ytmusic, bandcamp, deezer, tidal, kick, epicgames, gog, playstation, roblox, gamejolt, newgrounds, modrinth, curseforge, substack, ghost, wordpress, linktree, carrd, replit, gitbook, pypi, npmjs
+#   social: twitch, youtube, linkedin, instagram, x, mastodon, bluesky, threads, reddit, tiktok, facebook, xing, telegram, signal, whatsapp, spotify, soundcloud, devto, medium, stackoverflow, leetcode, kaggle, orcid, scholar, itchio, artstation, behance, dribbble, pinterest, email, website, applemusic, ytmusic, bandcamp, deezer, tidal, kick, epicgames, gog, playstation, roblox, gamejolt, newgrounds, modrinth, curseforge, substack, ghost, wordpress, linktree, carrd, replit, gitbook, pypi, npmjs
+#   funding: kofi, patreon, buymeacoffee, githubsponsors, paypal, liberapay, opencollective
+#   business: gumroad, shopify, etsy, company, shop, imprint
 icons.items = c, javascript, typescript, java, python, macos, cachyos, windows, ubuntu, raspberrypi, truenas, docker, wireguard, ghostty, claude, godot
 # sections = a full heading per category | compact = one heading, small category labels
 # Options: sections | compact
@@ -178,7 +223,8 @@ links.size = 72
 # Cards for people or companies you work with, or your employer
 people.title = WORKING WITH
 # Entries separated by commas, each: Name | Role | URL | Image.
-# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json, or empty for initials.
+# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
+# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
 # E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
 people.items = 
 
@@ -187,7 +233,8 @@ people.items =
 companies.type = people
 companies.title = COMPANIES
 # Entries separated by commas, each: Name | Role | URL | Image.
-# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json, or empty for initials.
+# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
+# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
 # E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
 companies.items = 
 
@@ -196,6 +243,102 @@ companies.items =
 employer.type = people
 employer.title = EMPLOYER
 # Entries separated by commas, each: Name | Role | URL | Image.
-# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json, or empty for initials.
+# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
+# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
 # E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
 employer.items = 
+
+# ---- now: Now (hidden, not in layout) ----
+# What you are doing right now, one line per topic
+now.title = NOW
+# One line per entry (\n between them in settings.txt), each: LABEL | text.
+# E.g. BUILDING | a homelab dashboard\nLEARNING | Rust\nPLAYING | Factorio
+now.items = 
+# A blinking dot after the last line
+now.cursor = on
+
+# ---- timeline: Timeline (hidden, not in layout) ----
+# Education, jobs and milestones on a dotted line
+timeline.title = TIMELINE
+# One line per entry, newest first, each: WHEN | TITLE | detail.
+# E.g. 2024 - NOW | APPLIED COMPUTER SCIENCE | Bachelor, University of ...\n2023 | ABITUR | ...
+timeline.items = 
+
+# ---- feed: Feed (hidden, not in layout) ----
+# Latest videos or posts from RSS / Atom feeds (YouTube, blogs), fetched by the workflow
+feed.title = LATEST VIDEOS
+# Feed URLs, or youtube:<channel id> / youtube:@handle. Several feeds are merged by date.
+# E.g. youtube:@Matrexx, https://blog.example.com/rss.xml
+feed.sources = 
+feed.limit = 4
+# Show the video / post image (in greyscale)
+feed.thumbs = on
+# Options: hide | placeholder
+feed.empty = hide
+
+# ---- twitch: Twitch live (hidden, not in layout) ----
+# Shows when you are live on Twitch (needs TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET secrets)
+twitch.title = 
+twitch.channel = matrexx_live
+# hide = only visible while live | show = an OFFLINE card linking to the channel
+# Options: hide | show
+twitch.offline = hide
+
+# ---- gists: Gists (hidden, not in layout) ----
+# Cards for your pinned or latest public gists (GitHub data)
+gists.title = SNIPPETS
+# Options: pinned | recent
+gists.mode = pinned
+gists.limit = 4
+# Options: hide | placeholder
+gists.empty = hide
+
+# ---- code: Code (hidden, not in layout) ----
+# A short code snippet in a terminal-style card
+code.title = SNIPPET
+# Shown in the card's title bar
+code.file = hello.c
+# Up to 24 lines; lines starting with // or # are drawn dimmer (comments)
+code.code = 
+# Optional https:// link for the card, e.g. the gist
+code.link = 
+
+# ---- guestbook: Guestbook (hidden, not in layout) ----
+# Latest comments on a GitHub issue of this repo, with a link to sign it
+guestbook.title = GUESTBOOK
+# Open an issue in this repo (e.g. "Guestbook") and enter its number; 0 = not set up
+guestbook.issue = 0
+# owner = only comments you reacted to with a thumbs up (moderation) | all = every comment
+# Options: owner | all
+guestbook.approval = owner
+guestbook.limit = 5
+
+# ---- counter: Visitor counter (hidden, not in layout) ----
+# Image from your own counter server (tools/counter/), drawn in the same style
+counter.title = 
+# https:// address of tools/counter/server.mjs, e.g. https://counter.example.com/counter.svg; empty = hidden
+counter.url = 
+counter.height = 48
+
+# ---- business: People (hidden, not in layout) ----
+# Cards for people or companies you work with, or your employer
+business.type = people
+business.title = MY BUSINESS
+# Entries separated by commas, each: Name | Role | URL | Image.
+# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
+# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
+# E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
+business.items = 
+
+# ---- support: Socials (hidden, not in layout) ----
+# Link tiles to your profiles
+support.type = socials
+support.title = SUPPORT
+# icon=url pairs, optionally with a label: icon=url|LABEL. The same icon may appear more than once.
+# E.g. youtube=https://www.youtube.com/@name|MAIN, youtube=https://www.youtube.com/@name2|CLIPS, website=https://example.com|BLOG
+support.items = 
+# below = logo with the name underneath | none = logo only | badge = logo left, name right
+# Options: below | none | badge
+support.tile = badge
+# Display height in px of a below-style tile; the other styles scale with it
+support.size = 72

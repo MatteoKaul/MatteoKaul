@@ -8,9 +8,11 @@ settings.txt ─┐
 fonts/*.json ─┤
 icons.json ───┼─► scripts/build.mjs ──► README.md
 assets/src/ ──┤       │                  assets/gen/**.svg
-data/*.json ──┘       └─ scripts/render.mjs ─ lib/settings.mjs, lib/draw.mjs
+data/ ───────┘       └─ scripts/render.mjs ─ lib/settings.mjs, lib/draw.mjs
      ▲
-scripts/fetch.mjs ◄── GitHub GraphQL API (stats, repos, releases, activity)
+scripts/fetch.mjs ◄── GitHub GraphQL API (stats, repos, releases, gists, guestbook),
+     │                 RSS/Atom feeds, avatars, thumbnails
+scripts/live.mjs ◄─── Twitch API (live status, optional)
 
 editor/ ── loads the same files + render.mjs in the browser, live preview,
            exports a new settings.txt
@@ -26,14 +28,18 @@ editor/ ── loads the same files + render.mjs in the browser, live preview,
 | `scripts/lib/settings.mjs` | Option schema (`THEME_FIELDS`, `TYPES`), settings.txt parser/writer, validation. |
 | `scripts/lib/draw.mjs` | Dot-matrix text and every SVG piece (banner, tiles, cards, stats, ...). |
 | `scripts/build.mjs` | Node entry: reads the files, calls `render`, writes `README.md` and `assets/gen/`. |
-| `scripts/fetch.mjs` | Node entry: reads public GitHub data into `data/github.json` and GitHub avatars for people cards into `data/avatars/`. |
+| `scripts/fetch.mjs` | Node entry: public GitHub data → `data/github.json`, avatars → `data/avatars/`, feeds → `data/feeds.json` + `data/thumbs/`. |
+| `scripts/live.mjs` | Node entry: Twitch live status → `data/live.json` (only with Twitch secrets). |
+| `scripts/lib/sources.mjs` | Parsers for the fetched data (RSS/Atom, gists, guestbook comments, Twitch); pure functions. |
 | `scripts/icons.json` | Icon catalog: `categories` (key → heading) and `icons` (key → label, category, SVG markup of the logo in a 24×24 box, optional `scale`). |
-| `fonts/led.json` | Dot font: `small` 5×7 and `large` 7×9 glyph grids (`"1"` = dot). |
-| `assets/src/` | Source images (banner background). |
+| `fonts/led.json`, `fonts/micro.json` | Dot fonts: `small` and `large` glyph grids (`"1"` = dot). led = 5×7 / 7×9, micro = 3×5 / 5×7. |
+| `assets/src/` | Your source files: banner backgrounds (images, GIFs, videos), logos for people cards. |
 | `assets/gen/` | Generated SVGs. Deleted and rebuilt on every build. |
-| `data/` | Last fetched GitHub data and avatars (created by the workflow). |
+| `data/` | Fetched data (created by the workflow): `github.json`, `feeds.json`, `live.json`, `avatars/`, `thumbs/` (images without extension, the type is read from the bytes), `media/` (converted video banners). |
 | `editor/` | Graphical editor (static HTML/CSS/JS, no build step). |
 | `.github/workflows/profile.yml` | Daily / on-change job: fetch, build, commit. |
+| `.github/workflows/live.yml` | Optional 10-minute Twitch check (off until you enable its schedule). |
+| `tools/counter/server.mjs` | Self-hosted visitor counter (see below). |
 | `HANDOFF.md` | Current status and open points. |
 
 ## Running it locally
@@ -46,7 +52,11 @@ node scripts/build.mjs --sample           # same with fake data (try layouts)
 node scripts/build.mjs --write-settings   # also rewrite settings.txt with every
                                           # option and its explanation
 GITHUB_TOKEN=<token> GH_USER=MatteoKaul node scripts/fetch.mjs   # real data
+TWITCH_CLIENT_ID=<id> TWITCH_CLIENT_SECRET=<secret> node scripts/live.mjs
 ```
+
+Video banners (mp4, webm, mov) additionally need `ffmpeg` (with libwebp) for
+the one-time conversion; the workflow installs it when needed.
 
 `--sample` overwrites README.md and assets/gen with fake numbers; run a plain
 build (or `git checkout README.md assets/gen`) before committing.
@@ -69,14 +79,20 @@ The editor never writes to the repo. Use "Download settings.txt" or "Copy
 settings.txt", then commit the file ("Edit on GitHub" opens it in GitHub's
 web editor: select all, paste, commit). The workflow rebuilds the profile.
 
-"Data: Sample data" previews modules that need GitHub data (projects,
-releases, activity) before you have any.
+"Data: Sample data" previews modules that need fetched data (projects,
+releases, activity, gists, feed, Twitch, guestbook) before you have any.
+"Preview: GitHub light" shows the light variant when `theme.mode` is `light`
+or `auto`. The theme panel has colour presets (Mono, Amber, Phosphor, Ice,
+Red, Grey). A background you try with "Try another background" only lives in
+the preview; GIFs play, videos show their first frame.
 
 ## settings.txt
 
 Flat `key = value` lines. Lines starting with `#` are comments (only whole
 lines, so values like `#ffffff` work), `\n` is a line break inside a text
 value. Lists are comma separated, pairs are `key=value` items in a list.
+Line lists (now, timeline) have one entry per line (`\n`) with `|` between
+the columns.
 
 ```
 # modules from top to bottom
@@ -100,7 +116,7 @@ source of truth is `THEME_FIELDS` and `TYPES` in `scripts/lib/settings.mjs`.
 
 | Type | Shows | Data |
 | --- | --- | --- |
-| `banner` | Title in the large dot font on a greyscale photo or a colour | – |
+| `banner` | Title in the large dot font on a greyscale photo, animation, video or a colour; optional title animation, cursor and ticker | – |
 | `text` | Heading + Markdown text | – |
 | `icons` | Logo tiles, grouped by category; only categories with an enabled icon appear | – |
 | `projects` | Cards for pinned / recently pushed / listed repos | GitHub |
@@ -108,12 +124,22 @@ source of truth is `THEME_FIELDS` and `TYPES` in `scripts/lib/settings.mjs`.
 | `stats` | Repos, stars, commits (last year), followers, top languages | GitHub |
 | `activity` | Contribution calendar as a dot grid | GitHub |
 | `socials` | Link tiles (any icon + URL, optional own label) | – |
-| `people` | Cards for people, companies or an employer: image, name, role, link | GitHub avatars |
+| `people` | Cards for people, companies, an employer or your own business: image, name, role, link | GitHub avatars |
+| `now` | "What I'm doing now" lines: LABEL \| text, with a blinking cursor | – |
+| `timeline` | Education / jobs / milestones on a dotted line | – |
+| `feed` | Latest videos or posts from RSS/Atom feeds (YouTube, blogs), with greyscale thumbnails | feeds |
+| `twitch` | LIVE card while you stream (pulsing dot, title, game), optional OFFLINE card | Twitch |
+| `gists` | Cards for pinned or latest public gists | GitHub |
+| `code` | A code snippet in a terminal-style card | – |
+| `guestbook` | Latest comments of a guestbook issue + "sign" button | GitHub |
+| `counter` | Image from your own counter server | your server |
 | `divider` | Dotted line | – |
 
 Prepared but hidden (switch them on in `layout` or the editor): `activity`,
-`socials` (contact), `links` (websites, channels, music, games), `people`
-(working with), `companies`, `employer`, `divider`.
+`socials` (contact), `links` (websites, channels, music, games), `support`
+(Patreon, Ko-fi, ...), `people` (working with), `companies`, `employer`,
+`business` (your own company), `now`, `timeline`, `feed`, `twitch`, `gists`,
+`code`, `guestbook`, `counter`, `divider`.
 
 ### Links (`socials` type)
 
@@ -127,16 +153,83 @@ links.items = website=https://example.com|PORTFOLIO, youtube=https://www.youtube
 Links must start with `https://`, `http://` or `mailto:`. All platform icons
 are in the `social` category of `scripts/icons.json` (YouTube, YouTube Music,
 Spotify, Apple Music, Bandcamp, SoundCloud, Twitch, Kick, Steam, itch.io,
-Epic, GOG, PlayStation, blogs, Linktree, website, email, ...).
+Epic, GOG, PlayStation, blogs, Linktree, website, email, ...). Support /
+funding: `patreon`, `kofi`, `buymeacoffee`, `githubsponsors`, `paypal`,
+`liberapay`, `opencollective`. Business: `company`, `shop`, `imprint`
+(Impressum), `gumroad`, `shopify`, `etsy`.
 
 ### People (`people` type)
 
 `items = Name | Role | URL | Image, ...` (no commas inside an entry). Image is
 `gh:<login>` for a GitHub avatar (downloaded by `fetch.mjs` on the next
-workflow run, shown greyscale), an icon key (e.g. a company logo like
-`github` or `website`), or empty for the initials. The same type is used for
-the `people`, `companies` and `employer` modules; add more with
-`<id>.type = people`.
+workflow run, shown greyscale), `file:<name>` for your own logo in
+`assets/src/` (png/jpg/webp/gif, shown greyscale in a rounded square), an
+icon key (e.g. `company`, `shop`, `github`), or empty for the initials. The
+same type is used for the `people`, `companies`, `employer` and `business`
+modules; add more with `<id>.type = people`. Your own business, e.g.:
+
+```
+business.items = Matrexx Media | Streaming & web development | https://example.com | file:logo.png
+```
+
+and an imprint link via a links module: `imprint=https://example.com/impressum|IMPRINT`.
+
+### Banner
+
+- `banner.image`: a file in `assets/src/` or `none` (then `banner.color`).
+  Images (png, jpg, webp) are shown still; **GIFs and animated WebPs play**
+  inside the banner (greyscale and brightness are applied live). **Videos**
+  (mp4, webm, mov) are converted by `build.mjs` with ffmpeg into a greyscale
+  animated WebP in `data/media/` (`banner.fps`, `banner.duration`; redone only
+  when the file or these options change). Keep animations short: the whole
+  banner is one SVG, a warning is printed above 5 MB.
+- `banner.contrast`, `banner.brightness`, `banner.position`, `banner.tint`
+  (colour of the highlights, `#ffffff` = black and white).
+- `banner.effect`: `type` (letters appear one by one), `flicker` (some
+  letters flicker like an old LED sign), `pulse` (slow breathing);
+  `banner.cursor = on` adds a blinking dot cursor; `banner.ticker` scrolls a
+  text along the bottom (`banner.ticker_speed`). All animations are CSS
+  inside the SVG; viewers with "reduce motion" see a still banner.
+- `banner.font`: `theme` or another font for the banner only (`micro` has
+  digits).
+- `banner.light`: in light mode `keep` the dark banner or `adapt` it
+  (inverted photo, dark letters).
+
+### Feed, Twitch, gists, guestbook
+
+- `feed.sources`: feed URLs or `youtube:<channel id>` / `youtube:@handle`.
+  Several feeds are merged by date. Thumbnails (`feed.thumbs`) are downloaded
+  once into `data/thumbs/`.
+- `twitch`: needs a Twitch application (dev.twitch.tv/console → Register Your
+  Application, category "Website Integration", redirect `http://localhost`)
+  and its id and secret as repository secrets `TWITCH_CLIENT_ID` and
+  `TWITCH_CLIENT_SECRET`. The daily run updates the status; for a current
+  LIVE card enable the schedule in `.github/workflows/live.yml` (checks every
+  10 minutes, commits only on a change). `twitch.offline = hide` shows the
+  card only while you are live.
+- `gists`: pinned gists (pin them on your profile like repos) or the latest
+  public ones.
+- `guestbook`: open an issue in this repo (e.g. "Guestbook – leave a
+  comment"), set `guestbook.issue` to its number. With `approval = owner`
+  (default) only comments you reacted to with 👍 appear, so spam never shows
+  up on the profile. Updated with the daily run.
+
+### Visitor counter
+
+GitHub only shows static files, so counting views needs a small server.
+`tools/counter/server.mjs` (Node, no dependencies) answers
+`/counter.svg` with the count in the profile style and counts every request.
+Run it from a clone of this repo on a machine reachable over https (e.g. your
+homelab behind Caddy / nginx / a Cloudflare Tunnel):
+
+```sh
+PORT=8080 COUNT_FILE=/data/count.json node tools/counter/server.mjs
+# or with Docker:
+docker run -d --restart unless-stopped -p 8080:8080 -v "$PWD":/app -w /app node:22-alpine node tools/counter/server.mjs
+```
+
+Then set `counter.url = https://<your host>/counter.svg` and add `counter` to
+the layout. (`/counter.svg?light` gives the light colours.)
 
 `projects` and `releases` disappear while they have nothing to show
 (`empty = hide`) and appear on their own with the next daily run once you have
@@ -174,6 +267,17 @@ To add an icon: add an entry to `scripts/icons.json` with a 24×24 SVG
 slant, corner radius and the font. Everything is drawn from these values, so a
 new look is a few settings, not code.
 
+- `theme.mode`: `dark` (the colours `fg`, `bg`, ...), `light` (the `light_*`
+  colours) or `auto`: every image exists twice (light ones in
+  `assets/gen/light/`) and the README uses `<picture>` so GitHub shows the
+  one matching the viewer's theme.
+- `theme.palette = auto` uses only `fg` / `bg` (and `light_fg` / `light_bg`)
+  and mixes the other colours from them; `theme.contrast` sets how far they
+  stand out. With `manual` every colour is used as set.
+- Fonts: `led` (5×7 text, 7×9 banner) and `micro` (3×5 text, 5×7 banner with
+  digits). Small text is scaled to the same height whatever the font, so
+  layouts fit with every font.
+
 A font is a JSON file in `fonts/` with a `small` (used for all text) and an
 optional `large` grid set (banner). Copy `led.json`, change the grids and set
 `theme.font = <file name without .json>`.
@@ -182,22 +286,35 @@ optional `large` grid set (banner). Copy `led.json`, change the grids and set
 
 `.github/workflows/profile.yml` runs daily at 03:17 UTC, on manual start and
 when settings, scripts, fonts or source images change on `main`. It fetches
-data, builds, and commits `README.md`, `assets/gen/` and `data/` if they
-changed. It needs *Settings → Actions → General → Workflow permissions →
-Read and write permissions*.
+data (and the Twitch status if the secrets exist), installs ffmpeg only if
+`assets/src` has videos, builds, and commits `README.md`, `assets/gen/` and
+`data/` if they changed. It needs *Settings → Actions → General → Workflow
+permissions → Read and write permissions*.
+
+`.github/workflows/live.yml` is the optional frequent Twitch check (see
+above). Both workflows share one concurrency group and never push at once.
 
 ## Security notes
 
 - The workflow token only has `contents: write` on this repo and only reads
-  public data. No other secrets are used.
+  public data. The only other secrets are the optional Twitch id/secret,
+  passed to `live.mjs` alone.
 - All option values are validated in `resolve()` (lib/settings.mjs): colours must be
   hex, numbers are clamped, select options are checked, image names cannot
   contain paths, module ids are plain names. This keeps settings from
   injecting markup into SVGs or writing/reading files outside the repo folders.
-- Text from GitHub (repo descriptions) and from settings is XML-escaped before
-  it goes into SVG or HTML attributes. GitHub additionally sanitises README HTML.
-- The editor has a Content-Security-Policy (only its own files) and shows the
+- Text from GitHub (repo descriptions, gist names, guestbook comments), from
+  feeds and from Twitch is reduced to plain text and XML-escaped before it
+  goes into SVG or HTML. Links from outside must be http(s). Downloaded images
+  (avatars, thumbnails) must be png/jpg/gif/webp and under 2 MB; they are
+  stored under a hash or login, never under a name from outside.
+- Guestbook comments only appear after your 👍 (default), and comments do not
+  trigger the workflow.
+- The counter server reads nothing from the request except the path and a
+  `light` flag, and only serves `/counter.svg` and `/health`.
+- The editor has a Content-Security-Policy (only its own files, plus local
+  blob: videos for the first-frame preview) and shows the
   preview in a sandboxed iframe without script permission, so an imported
   settings file cannot run code. It stores nothing and sends nothing anywhere.
-- Third-party actions are referenced by major version (`@v4`). For stricter
-  supply-chain safety, pin them to commit SHAs.
+- Third-party actions are pinned to commit SHAs (checkout v4.3.1, setup-node
+  v4.4.0), so a moved tag cannot run other code.

@@ -2,6 +2,7 @@
 //
 // Everything is drawn from a theme (colours, dot shape/size, slant) and a
 // font (glyph grids from fonts/*.json, "1" = dot). Functions return SVG text.
+import { rgb } from "./settings.mjs";
 
 export const CARD_W = 880; // width of headings and full-width cards
 
@@ -45,9 +46,13 @@ export const svgDoc = (w, h, body) =>
 /** Drawing context bound to a theme and font. */
 export function painter(theme, font) {
   const small = font.small, large = font.large || font.small;
+  // Small text keeps the height of a 7-row font whatever the font's rows are,
+  // so layouts work with every font (micro: 5 rows -> 1.5x the pitch).
+  const norm = 6 / (small.rows - 1);
 
   /** Dot text. (x, y) = top-left corner incl. dot radius (top-right with anchor "end"). */
   function text(str, x, y, { pitch, fill, anchor = "start", gap = 1, large: big = false, r } = {}) {
+    if (!big) pitch *= norm;
     const radius = r ?? pitch * theme.dot;
     const { points, width, height } = layout(str, pitch, big ? large : small, { gap, slant: theme.slant });
     const w = width + 2 * radius, h = height + 2 * radius;
@@ -57,11 +62,12 @@ export function painter(theme, font) {
   }
 
   /** Width of `str` at pitch 1 (scales linearly), for fitting. */
-  const unitWidth = (str, opts = {}) => layout(str, 1, opts.large ? large : small, { gap: opts.gap ?? 1, slant: theme.slant }).width;
+  const unitWidth = (str, opts = {}) =>
+    layout(str, 1, opts.large ? large : small, { gap: opts.gap ?? 1, slant: theme.slant }).width * (opts.large ? 1 : norm);
 
   /** Shorten str with a trailing "." until it fits maxWidth at this pitch. */
   function truncate(str, pitch, maxWidth) {
-    const fits = (s) => (unitWidth(s) + 2 * theme.dot) * pitch <= maxWidth;
+    const fits = (s) => (unitWidth(s) + 2 * theme.dot * norm) * pitch <= maxWidth;
     if (fits(str)) return str;
     while (str.length > 1 && !fits(str + ".")) str = str.slice(0, -1);
     return str + ".";
@@ -72,7 +78,7 @@ export function painter(theme, font) {
     `<rect x=".5" y=".5" width="${w - 1}" height="${h - 1}" rx="${theme.radius}" fill="${theme.bg}" stroke="${theme.border}"/>${body}`;
   const card = (w, h, body) => svgDoc(w, h, cardBody(w, h, body));
 
-  return { text, unitWidth, truncate, card, cardBody, small, large };
+  return { text, unitWidth, truncate, card, cardBody, small, large, norm };
 }
 
 // --------------------------------------------------------------- pieces --
@@ -107,7 +113,7 @@ export function tileParts(p, theme, icon, style = "below") {
   }
   // Long labels get tighter letter spacing, then a smaller pitch, so they always fit.
   const gap = icon.label.length > 8 ? 0.6 : 1;
-  const pitch = Math.min(3.0, (TILE_W - 16) / (p.unitWidth(icon.label, { gap }) + 2 * theme.dot));
+  const pitch = Math.min(3.0, (TILE_W - 16) / (p.unitWidth(icon.label, { gap }) + 2 * theme.dot * p.norm));
   const label = p.text(icon.label, TILE_W / 2, 0, { pitch, fill: theme.muted, gap, anchor: "middle" });
   return { w: TILE_W, h: TILE_H, body: p.cardBody(TILE_W, TILE_H,
     `${logo(48, TILE_W / 2, 46)}<g transform="translate(0 ${n(112 - label.h / 2)})">${label.svg}</g>`) };
@@ -152,7 +158,7 @@ export function categoryRows(p, theme, groups, o) {
     const cells = row.map(([title, icons], i) => {
       const x0 = i * (cellW + GAP);
       // Shrink long headings to fit the column (down to pitch 1.8), cut only below that.
-      const pitch = Math.max(1.8, Math.min(3.0, (cellW - 28) / (p.unitWidth(title) + 2 * theme.dot)));
+      const pitch = Math.max(1.8, Math.min(3.0, (cellW - 28) / (p.unitWidth(title) + 2 * theme.dot * p.norm)));
       const label = p.text(p.truncate(title, pitch, cellW - 28), x0 + 14, 0, { pitch, fill: theme.fg });
       const head = `<rect x="${n(x0)}" width="${n(cellW)}" height="${HEAD}" rx="${theme.radius}" fill="${theme.bg}"/>` +
         `<g transform="translate(0 ${n((HEAD - label.h) / 2)})">${label.svg}</g>`;
@@ -204,22 +210,25 @@ export function projectCard(p, theme, repo) {
 }
 
 /**
- * Person / company card (430x96): round image, name, role.
- *   avatar  {mime, base64} (GitHub avatar, shown greyscale) or null
- *   icon    catalog icon (logo) or null; without both: initials in dots
+ * Person / company card (430x96): image, name, role.
+ *   pic  {avatar} GitHub avatar (round, greyscale) | {logo} image file (rounded
+ *        square, greyscale) | {icon} catalog logo | {} initials in dots
  */
-export function personCard(p, theme, entry, avatar, icon) {
+export function personCard(p, theme, entry, pic = {}) {
   const W = 430, H = 96, R = 28, cx = 22 + R, cy = H / 2;
   let image;
-  if (avatar) {
-    image = `<defs><clipPath id="c"><circle cx="${cx}" cy="${cy}" r="${R}"/></clipPath>` +
-      `<filter id="g"><feColorMatrix type="saturate" values="0"/></filter></defs>` +
-      `<image href="data:${avatar.mime};base64,${avatar.base64}" x="${cx - R}" y="${cy - R}" width="${2 * R}" height="${2 * R}" ` +
-      `clip-path="url(#c)" filter="url(#g)"/>`;
-  } else if (icon) {
-    const size = 32 * (icon.scale || 1);
+  const photo = (img, clip) => `<defs><clipPath id="c">${clip}</clipPath>` +
+    `<filter id="g"><feColorMatrix type="saturate" values="0"/></filter></defs>` +
+    `<image href="data:${img.mime};base64,${img.base64}" x="${cx - R}" y="${cy - R}" width="${2 * R}" height="${2 * R}" ` +
+    `preserveAspectRatio="xMidYMid ${pic.logo ? "meet" : "slice"}" clip-path="url(#c)" filter="url(#g)"/>`;
+  if (pic.avatar) image = photo(pic.avatar, `<circle cx="${cx}" cy="${cy}" r="${R}"/>`);
+  else if (pic.logo) {
+    image = `<rect x="${cx - R}" y="${cy - R}" width="${2 * R}" height="${2 * R}" rx="10" fill="${theme.dim}"/>` +
+      photo(pic.logo, `<rect x="${cx - R}" y="${cy - R}" width="${2 * R}" height="${2 * R}" rx="10"/>`);
+  } else if (pic.icon) {
+    const size = 32 * (pic.icon.scale || 1);
     image = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${theme.dim}"/>` +
-      `<g transform="translate(${n(cx - size / 2)} ${n(cy - size / 2)}) scale(${(size / 24).toFixed(3)})" fill="${theme.fg}" color="${theme.fg}">${icon.svg}</g>`;
+      `<g transform="translate(${n(cx - size / 2)} ${n(cy - size / 2)}) scale(${(size / 24).toFixed(3)})" fill="${theme.fg}" color="${theme.fg}">${pic.icon.svg}</g>`;
   } else {
     const initials = entry.name.split(/\s+/).map((w) => w[0] || "").join("").slice(0, 2);
     const t = p.text(initials, cx, 0, { pitch: 3.0, fill: theme.fg, anchor: "middle" });
@@ -288,38 +297,223 @@ export function dividerSvg(theme) {
   return svgDoc(CARD_W, 24, `<g fill="${theme.faint}">${dots.join("")}</g>`);
 }
 
-/** Banner: photo (greyscale, darkened) or colour, title in the large font with a soft letter shadow. */
-export function bannerSvg(p, theme, opt, image) {
-  const W = 1600, H = 420, defs = [], body = [];
+/**
+ * Banner: photo / animation (greyscale, darkened) or colour, title in the
+ * large font with a soft letter shadow, optional title animation, blinking
+ * cursor and scrolling ticker (CSS animations, switched off for viewers who
+ * prefer reduced motion).
+ *   p       painter for the banner font
+ *   image   {mime, base64, width, height} or null; animated gif/webp just play
+ *   invert  light-mode version: inverted photo, letters in theme.fg
+ */
+export function bannerSvg(p, theme, opt, image, invert = false) {
+  const W = 1600, H = 420, defs = [], body = [], css = [];
   if (image) {
     // Photo scaled to the banner width; `position` picks the visible band.
     const scale = W / image.width, ph = image.height * scale;
     const y = -Math.max(0, ph - H) * (opt.position / 100);
-    const b = opt.brightness / 100, contrast = 1.15;
+    const b = opt.brightness / 100, contrast = opt.contrast / 100;
+    let slope = contrast * b, intercept = b * 0.5 * (1 - contrast);
+    if (invert) [slope, intercept] = [-slope, 1 - intercept];
+    const tint = opt.tint.toLowerCase().startsWith("#ffffff") || opt.tint.toLowerCase() === "#fff" ? ""
+      : `<feColorMatrix type="matrix" values="${rgb(opt.tint).map((v, i) =>
+        [0, 1, 2, 3].map((j) => (i === j ? (v / 255).toFixed(3) : 0)).join(" ") + " 0").join(" ")} 0 0 0 1 0"/>`;
     defs.push(`<filter id="photo" color-interpolation-filters="sRGB"><feColorMatrix type="saturate" values="0"/>` +
       `<feComponentTransfer>${["R", "G", "B"].map((c) =>
-        `<feFunc${c} type="linear" slope="${(contrast * b).toFixed(3)}" intercept="${(b * 0.5 * (1 - contrast)).toFixed(3)}"/>`).join("")}` +
-      `</feComponentTransfer></filter>`);
+        `<feFunc${c} type="linear" slope="${slope.toFixed(3)}" intercept="${intercept.toFixed(3)}"/>`).join("")}` +
+      `</feComponentTransfer>${tint}</filter>`);
     body.push(`<image href="data:${image.mime};base64,${image.base64}" x="0" y="${n(y)}" width="${W}" height="${n(ph)}" ` +
       `preserveAspectRatio="none" filter="url(#photo)"/>`);
   } else body.push(`<rect width="${W}" height="${H}" fill="${opt.color}"/>`);
 
   const title = String(opt.title).toUpperCase();
   const bad = [...new Set(title)].filter((c) => c !== " " && !(p.large.glyphs[c]));
-  if (bad.length) throw new Error(`banner.title: unsupported characters ${bad.join(" ")} (use A-Z and spaces)`);
-  if (title.trim()) {
-    const pitch = Math.min(15, (W * 0.85) / p.unitWidth(title, { large: true, gap: 2 }));
-    const t = p.text(title, W / 2, 0, { pitch, fill: theme.fg, large: true, gap: 2, anchor: "middle" });
-    const y = n((H - t.h) / 2);
-    if (opt.shadow > 0) {
-      // Same dots, drawn larger (they merge along the strokes) and blurred: a shadow that follows the letters.
-      const shadow = p.text(title, W / 2, 0, { pitch, fill: "#000", large: true, gap: 2, anchor: "middle", r: pitch * 0.6 });
-      defs.push(`<filter id="shadow" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation="3.5"/></filter>`);
-      body.push(`<g transform="translate(0 ${n(y - (pitch * 0.6 - pitch * theme.dot))})" opacity="${opt.shadow / 100}" filter="url(#shadow)">${shadow.svg}</g>`);
+  if (bad.length) throw new Error(`banner.title: unsupported characters ${bad.join(" ")} (use ${p.large.glyphs["1"] ? "A-Z, 0-9" : "A-Z"} and spaces)`);
+  const cursor = opt.cursor === "on", animated = cursor || opt.effect !== "none";
+  if (title.trim() || cursor) {
+    const big = { large: true, gap: 2 };
+    const advance = (p.large.cols + 2); // per character, at pitch 1
+    // the cursor sits one character after the title (or alone)
+    const units = title ? p.unitWidth(title, big) + (cursor ? advance : 0) : p.large.cols - 1;
+    const pitch = Math.min(15, (W * 0.85) / units);
+    const shadowFill = invert ? theme.bg : "#000";
+    const r = pitch * 0.6, dy = pitch * 0.6 - pitch * theme.dot; // shadow dots: larger, so shifted up
+    if (opt.shadow > 0) defs.push(`<filter id="shadow" x="-5%" y="-20%" width="110%" height="140%"><feGaussianBlur stdDeviation="3.5"/></filter>`);
+    const shadowOf = (str, x, anchor) => opt.shadow > 0
+      ? `<g transform="translate(0 ${n(-dy)})" opacity="${opt.shadow / 100}" filter="url(#shadow)">${
+        p.text(str, x - dy, 0, { pitch, fill: shadowFill, ...big, anchor, r }).svg}</g>` : "";
+    const t = p.text(title, W / 2, 0, { pitch, fill: theme.fg, ...big, anchor: "middle" });
+    const ty = n((H - t.h) / 2);
+    if (!animated) {
+      // Static title: one shadow + one path (the classic banner).
+      if (opt.shadow > 0) body.push(`<g transform="translate(0 ${n(ty - dy)})" opacity="${opt.shadow / 100}" filter="url(#shadow)">${
+        p.text(title, W / 2, 0, { pitch, fill: shadowFill, ...big, anchor: "middle", r }).svg}</g>`);
+      body.push(`<g transform="translate(0 ${ty})">${t.svg}</g>`);
+    } else {
+      // Animated: every letter is its own group so it can be switched on and off.
+      const left = W / 2 - (units * pitch + 2 * pitch * theme.dot) / 2;
+      const letters = [...title].map((ch, i) => ch === " " ? "" :
+        `<g class="c" style="--i:${i}">${shadowOf(ch, left + i * advance * pitch, "start")}` +
+        p.text(ch, left + i * advance * pitch, 0, { pitch, fill: theme.fg, ...big }).svg + "</g>");
+      const n1 = title.length;
+      if (opt.effect === "type") {
+        const dur = n(n1 * 0.18 + 4);
+        css.push(`.c{animation:type ${dur}s step-end infinite backwards;animation-delay:calc(var(--i) * .18s)}`,
+          `@keyframes type{0%{opacity:0}${n((0.18 / dur) * 100)}%{opacity:1}80%{opacity:1}85%,100%{opacity:0}}`);
+      } else if (opt.effect === "flicker") {
+        letters.forEach((l, i) => { if (l && (i * 7 + 3) % 5 === 0) letters[i] = l.replace('class="c"', 'class="c f"'); });
+        if (!letters.some((l) => l.includes('class="c f"'))) letters[letters.findIndex(Boolean)] = letters.find(Boolean).replace('class="c"', 'class="c f"');
+        css.push(`.f{animation:flicker 5s step-end infinite;animation-delay:calc(var(--i) * -1.3s)}`,
+          `@keyframes flicker{0%,40%,44%,47%,78%,81%,100%{opacity:1}42%{opacity:.15}45%{opacity:.4}79%{opacity:.2}}`);
+      } else if (opt.effect === "pulse") {
+        css.push(`.t{animation:pulse 4s ease-in-out infinite}@keyframes pulse{50%{opacity:.68}}`);
+      }
+      let cursorSvg = "";
+      if (cursor) {
+        // An underscore of dots in the bottom row, one character after the title.
+        const cx = left + (title ? n1 * advance * pitch : 0) + pitch * theme.dot;
+        const cy = (p.large.rows - 1) * pitch + pitch * theme.dot;
+        const pts = Array.from({ length: p.large.cols }, (_, c) => [cx + c * pitch, cy]);
+        cursorSvg = `<path class="k" fill="${theme.fg}" d="${dotPath(pts, pitch * theme.dot, theme.shape)}"/>`;
+        css.push(`.k{animation:blink 1.1s step-end infinite}@keyframes blink{50%{opacity:0}}`);
+      }
+      body.push(`<g class="t" transform="translate(0 ${ty})">${letters.join("")}${cursorSvg}</g>`);
     }
-    body.push(`<g transform="translate(0 ${y})">${t.svg}</g>`);
   }
-  return svgDoc(W, H, `<defs>${defs.join("")}</defs>${body.join("")}`);
+
+  if (opt.ticker) {
+    // Ticker: the text repeated along a dark band, moved left by exactly one repeat.
+    const BAND = 52, tp = 3.6, text = String(opt.ticker).toUpperCase() + "      ";
+    const L = [...text].length * (p.small.cols + 1) * tp * p.norm;
+    const copies = Math.ceil(W / L) + 1;
+    const line = p.text(text.repeat(copies), 0, 0, { pitch: tp, fill: theme.fg });
+    body.push(`<rect y="${H - BAND}" width="${W}" height="${BAND}" fill="${theme.bg}" opacity=".55"/>`,
+      `<g transform="translate(24 ${n(H - BAND + (BAND - line.h) / 2)})"><g class="tk">${line.svg}</g></g>`);
+    css.push(`.tk{animation:tick ${n(L / opt.ticker_speed)}s linear infinite}@keyframes tick{to{transform:translateX(-${n(L)}px)}}`);
+  }
+  const style = css.length ? `<style>${css.join("")}@media (prefers-reduced-motion:reduce){*{animation:none!important}}</style>` : "";
+  return svgDoc(W, H, `${style}<defs>${defs.join("")}</defs>${body.join("")}`);
+}
+
+// ------------------------------------------------------- more modules --
+
+/** Plain text in the theme's text font (for longer, free-form text). */
+const words = (theme, str, x, y, { size = 14, fill = theme.muted, anchor = "start" } = {}) =>
+  `<text x="${n(x)}" y="${n(y)}" font-family="${esc(theme.text_font)}" font-size="${size}" fill="${fill}"` +
+  `${anchor === "start" ? "" : ` text-anchor="${anchor}"`} xml:space="preserve">${esc(str)}</text>`;
+const clip = (str, max) => (str.length > max ? str.slice(0, max - 1).trimEnd() + "…" : str);
+const BLINK = `<style>.k{animation:blink 1.1s step-end infinite}@keyframes blink{50%{opacity:0}}` +
+  `@media (prefers-reduced-motion:reduce){*{animation:none!important}}</style>`;
+
+/** Now: LABEL | text rows, labels in dots; optional blinking cursor. */
+export function nowCard(p, theme, rows, cursor) {
+  const W = CARD_W, ROW = 40, pad = 24;
+  const labelW = Math.min(240, Math.max(...rows.map(([l]) => p.unitWidth(l) * 2.8)) + 2 * 2.8 * theme.dot);
+  const x2 = pad + labelW + 28, maxChars = Math.floor((W - x2 - pad) / 8.6);
+  const parts = rows.map(([label, text], i) => {
+    const y = 22 + i * ROW;
+    return p.text(p.truncate(label, 2.8, 240), pad, y, { pitch: 2.8, fill: theme.muted }).svg +
+      words(theme, clip(text, maxChars), x2, y + 15, { size: 15, fill: theme.fg });
+  });
+  let extra = "";
+  if (cursor) { // after the last line's text (monospace estimate)
+    const last = clip(rows[rows.length - 1][1], maxChars);
+    const cx = x2 + last.length * 9 + 10, cy = 22 + (rows.length - 1) * ROW + 9;
+    extra = BLINK + `<rect class="k" x="${n(cx)}" y="${cy - 8}" width="9" height="16" rx="2" fill="${theme.fg}"/>`;
+  }
+  return p.card(W, 22 + rows.length * ROW + 6, extra + parts.join(""));
+}
+
+/** Timeline: WHEN | TITLE | detail rows on a dotted vertical line, newest first. */
+export function timelineCard(p, theme, rows) {
+  const W = CARD_W, ROW = 70, lineX = 196, x = lineX + 28, top = 26;
+  const parts = [];
+  const H = top + rows.length * ROW;
+  for (let y = top + 8; y < H - ROW + 12; y += 8) parts.push(`<circle cx="${lineX}" cy="${y}" r="1.6" fill="${theme.faint}"/>`);
+  rows.forEach(([when, title, detail], i) => {
+    const y = top + i * ROW;
+    parts.push(p.text(p.truncate(when, 2.4, 150), lineX - 24, y + 2, { pitch: 2.4, fill: theme.muted, anchor: "end" }).svg,
+      i === 0 ? `<circle cx="${lineX}" cy="${y + 9}" r="7" fill="${theme.fg}"/>`
+        : `<circle cx="${lineX}" cy="${y + 9}" r="6" fill="${theme.bg}" stroke="${theme.fg}" stroke-width="2"/>`,
+      p.text(p.truncate(title, 3.0, W - x - 24), x, y, { pitch: 3.0, fill: theme.fg }).svg,
+      detail ? words(theme, clip(detail, Math.floor((W - x - 24) / 7.8)), x, y + 44, { size: 13 }) : "");
+  });
+  return p.card(W, H, parts.join(""));
+}
+
+/** One feed entry (video / post): optional greyscale thumbnail, title, source and date. */
+export function feedCard(p, theme, item, thumb) {
+  const W = 430, H = 132, pad = 18;
+  let x = pad, image = "";
+  if (thumb) {
+    const tw = 160, th = 90, ty = (H - th) / 2;
+    image = `<defs><clipPath id="c"><rect x="${pad}" y="${ty}" width="${tw}" height="${th}" rx="8"/></clipPath>` +
+      `<filter id="g"><feColorMatrix type="saturate" values="0"/></filter></defs>` +
+      `<image href="data:${thumb.mime};base64,${thumb.base64}" x="${pad}" y="${ty}" width="${tw}" height="${th}" ` +
+      `preserveAspectRatio="xMidYMid slice" clip-path="url(#c)" filter="url(#g)"/>`;
+    x = pad + tw + 16;
+  }
+  const maxW = W - x - pad, perLine = Math.floor(maxW / 7.9);
+  const lines = wrapWords(item.title, perLine, 3);
+  return p.card(W, H, image +
+    p.text(p.truncate(item.source || "FEED", 2.2, maxW), x, 18, { pitch: 2.2, fill: theme.faint }).svg +
+    lines.map((l, i) => words(theme, l, x, 54 + i * 18, { size: 13.5, fill: theme.fg })).join("") +
+    p.text(item.date || "", x, H - 30, { pitch: 2.4, fill: theme.muted }).svg);
+}
+
+/** Twitch: LIVE (pulsing dot, stream title, game) or OFFLINE. */
+export function liveCard(p, theme, live, channel) {
+  const W = CARD_W, H = 96;
+  const on = !!live?.live;
+  const dot = on
+    ? `<style>.d{animation:pulse 1.6s ease-in-out infinite;transform-origin:44px 48px}@keyframes pulse{50%{opacity:.35;transform:scale(.8)}}` +
+      `@media (prefers-reduced-motion:reduce){*{animation:none!important}}</style><circle class="d" cx="44" cy="48" r="11" fill="${theme.fg}"/>`
+    : `<circle cx="44" cy="48" r="11" fill="none" stroke="${theme.faint}" stroke-width="2.5"/>`;
+  const state = p.text(on ? "LIVE" : "OFFLINE", 72, 24, { pitch: 4.4, fill: on ? theme.fg : theme.faint });
+  const where = p.text(`TWITCH.TV/${channel}`, 72, 64, { pitch: 2.2, fill: theme.muted });
+  const right = on
+    ? words(theme, clip(live.title || "", 58), W - 24, 44, { size: 15, fill: theme.fg, anchor: "end" }) +
+      p.text(p.truncate(live.game || "", 2.4, 400), W - 24, 58, { pitch: 2.4, fill: theme.muted, anchor: "end" }).svg
+    : "";
+  return p.card(W, H, dot + state.svg + where.svg + right);
+}
+
+/** Code snippet in a terminal-like window; comment lines dimmer. */
+export function codeCard(p, theme, file, code) {
+  const W = CARD_W, BAR = 40, LINE = 21, pad = 24;
+  const lines = String(code).replace(/\t/g, "  ").split("\n").slice(0, 24).map((l) => clip(l.trimEnd(), 92));
+  const H = BAR + 18 + lines.length * LINE + 12;
+  const bar = [0, 1, 2].map((i) => `<circle cx="${pad + 6 + i * 20}" cy="${BAR / 2}" r="6" fill="${[theme.fg, theme.muted, theme.faint][i]}"/>`).join("") +
+    p.text(p.truncate(file || "", 2.4, 500), W / 2, BAR / 2 - 8, { pitch: 2.4, fill: theme.muted, anchor: "middle" }).svg +
+    `<rect y="${BAR}" x="1" width="${W - 2}" height="1" fill="${theme.border}"/>`;
+  const body = lines.map((l, i) => words(theme, l, pad, BAR + 30 + i * LINE,
+    { size: 14, fill: /^\s*(\/\/|#|--|;)/.test(l) ? theme.faint : theme.fg })).join("");
+  return p.card(W, H, bar + body);
+}
+
+/** Guestbook: latest entries (@login, date, text) and a "sign" line. */
+export function guestbookCard(p, theme, entries) {
+  const W = CARD_W, ROW = 58, pad = 24;
+  const parts = entries.map((e, i) => {
+    const y = 22 + i * ROW;
+    return p.text(p.truncate(`@${e.login}`, 2.6, 500), pad, y, { pitch: 2.6, fill: theme.fg }).svg +
+      p.text(e.date || "", W - pad, y, { pitch: 2.2, fill: theme.faint, anchor: "end" }).svg +
+      words(theme, clip(e.text, 96), pad, y + 36, { size: 13.5 });
+  });
+  const y = 22 + entries.length * ROW;
+  if (!entries.length) parts.push(p.text("NO ENTRIES YET - BE THE FIRST", pad, 24, { pitch: 2.8, fill: theme.faint }).svg);
+  const yy = entries.length ? y : 64;
+  const sign = p.text("SIGN THE GUESTBOOK >", pad + 16, yy + 12, { pitch: 2.6, fill: theme.bg });
+  parts.push(`<rect x="${pad}" y="${yy}" width="${n(sign.w + 32)}" height="${n(sign.h + 24)}" rx="${n((sign.h + 24) / 2)}" fill="${theme.fg}"/>`, sign.svg);
+  return p.card(W, yy + sign.h + 24 + 22, parts.join(""));
+}
+
+/** Visitor counter badge: label + number (used by tools/counter/server.mjs). */
+export function counterSvg(p, theme, count, label = "VISITORS") {
+  const H = 48, l = p.text(label, 18, 0, { pitch: 2.4, fill: theme.muted });
+  const num = p.text(String(count).padStart(6, "0"), 18 + l.w + 16, 0, { pitch: 3.2, fill: theme.fg });
+  const W = Math.ceil(18 + l.w + 16 + num.w + 18);
+  return p.card(W, H, `<g transform="translate(0 ${n((H - l.h) / 2)})">${l.svg}</g><g transform="translate(0 ${n((H - num.h) / 2)})">${num.svg}</g>`);
 }
 
 /** Dot-matrix text as a standalone SVG (used for the editor's own headings). */
@@ -333,9 +527,10 @@ export const renderTile = (theme, font, icon) => tile(painter(theme, font), them
 
 // ---------------------------------------------------------------- images --
 
-/** Width/height from PNG, JPEG or WebP bytes (Uint8Array), without decoding. */
+/** Width/height from PNG, JPEG, GIF or WebP bytes (Uint8Array), without decoding. */
 export function imageSize(b) {
   const u16 = (i) => (b[i] << 8) | b[i + 1], le16 = (i) => b[i] | (b[i + 1] << 8);
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return { width: le16(6), height: le16(8), mime: "image/gif" };
   if (b[0] === 0x89 && b[1] === 0x50) return { width: (u16(16) << 16) | u16(18), height: (u16(20) << 16) | u16(22), mime: "image/png" };
   if (b[0] === 0xff && b[1] === 0xd8) { // JPEG: walk the segments to the SOF marker
     for (let i = 2; i < b.length;) {
@@ -354,5 +549,5 @@ export function imageSize(b) {
     }
     if (kind === "VP8X") return { width: 1 + (b[24] | (b[25] << 8) | (b[26] << 16)), height: 1 + (b[27] | (b[28] << 8) | (b[29] << 16)), mime: "image/webp" };
   }
-  throw new Error("unsupported image format (use png, jpg or webp)");
+  throw new Error("unsupported image format (use png, jpg, gif or webp)");
 }

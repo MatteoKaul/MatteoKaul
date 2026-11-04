@@ -10,15 +10,18 @@
 //
 // This file re-exports everything the build script and the editor need.
 import {
-  activityCard, bannerSvg, categoryRows, dividerSvg, esc, heading, painter, personCard, placeholderCard,
-  projectCard, releaseCard, statsCard, tile,
+  activityCard, bannerSvg, categoryRows, codeCard, counterSvg, dividerSvg, esc, feedCard, guestbookCard, heading,
+  liveCard, nowCard, painter, personCard, placeholderCard, projectCard, releaseCard, statsCard, tile, timelineCard,
 } from "./lib/draw.mjs";
-import { splitList, splitPairs, splitPeople } from "./lib/settings.mjs";
+import { MEDIA_FILE, isVideo, splitList, splitPairs, splitPeople, splitRows } from "./lib/settings.mjs";
 
 const LINK = /^(https?:\/\/|mailto:)/i; // allowed link targets in the README
 
 export * from "./lib/settings.mjs";
 export { imageSize, renderLabel, renderTile } from "./lib/draw.mjs";
+
+/** A visitor counter badge as SVG (tools/counter/server.mjs, editor preview). */
+export const renderCounter = (theme, font, count, label) => counterSvg(painter(theme, font), theme, count, label);
 
 // ------------------------------------------------------------- data use --
 
@@ -69,35 +72,104 @@ export function iconGroups(opt, catalog) {
     .filter(([, keys]) => keys.length);
 }
 
+function pickFeed(data, opt) {
+  // "*" only exists in SAMPLE_DATA: sample entries for any source
+  const items = splitList(opt.sources).flatMap((src) => data.feeds?.[src] ?? data.feeds?.["*"] ?? []);
+  const seen = new Set();
+  return items.filter((i) => !seen.has(i.url) && seen.add(i.url))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, opt.limit);
+}
+
+/**
+ * Repo paths of all images the visible modules need (banner backgrounds,
+ * logos, avatars, thumbnails). build.mjs and the editor load these into
+ * assets.images; files that do not exist yet are simply left out.
+ */
+export function neededImages(cfg, data) {
+  const paths = new Set();
+  for (const m of cfg.layout) {
+    const o = m.opt;
+    if (m.type === "banner" && o.image !== "none") paths.add(mediaPath(o.image));
+    if (m.type === "people") for (const e of splitPeople(o.items)) {
+      if (e.image.startsWith("gh:")) paths.add(`data/avatars/${e.image.slice(3)}`);
+      if (e.image.startsWith("file:")) paths.add(`assets/src/${e.image.slice(5)}`);
+    }
+    if (m.type === "feed" && o.thumbs === "on") for (const i of pickFeed(data, o)) if (THUMB.test(i.thumb)) paths.add(i.thumb);
+  }
+  return [...paths].filter((path) => /^(assets\/src|data\/(avatars|thumbs|media))\/[\w-][\w.-]*$/.test(path));
+}
+
+/** Videos are converted to an animated webp in data/media/ (by build.mjs). */
+export const mediaPath = (file) => (isVideo(file) ? `data/media/${file}.webp` : `assets/src/${file}`);
+const THUMB = /^data\/thumbs\/[0-9a-f]{12}$/;
+
+/** Font names the config uses (theme font, banner fonts). */
+export const neededFonts = (cfg) => [...new Set([cfg.theme.font,
+  ...cfg.layout.filter((m) => m.type === "banner" && m.opt.font !== "theme").map((m) => m.opt.font)])];
+
 // --------------------------------------------------------------- render --
 
 /**
  * Render everything.
  *   cfg     resolve(settings)
- *   data    data/github.json (or SAMPLE_DATA)
- *   assets  {font, catalog, images: {filename: {mime, base64, width, height}},
- *            avatars: {login: {mime, base64}}}
+ *   data    data/github.json + feeds + live (or SAMPLE_DATA)
+ *   assets  {fonts: {name: font}, catalog, images: {repo path: {mime, base64, width, height}}}
  * Returns {files: {path: svg text}, readme: markdown}; all paths are under assets/gen/.
+ *
+ * theme.mode = auto renders every image twice (light ones in assets/gen/light/)
+ * and the README picks one per viewer with <picture>.
  */
 export function render(cfg, data, assets) {
-  const { theme } = cfg, { catalog } = assets;
-  const p = painter(theme, assets.font);
+  const mode = cfg.theme.mode;
+  const main = renderPass(cfg, data, assets, { theme: mode === "light" ? cfg.light : cfg.theme, light: mode === "light", prefix: "" });
+  let { readme } = main;
+  const files = { ...main.files };
+  if (mode === "auto") {
+    const alt = renderPass(cfg, data, assets, { theme: cfg.light, light: true, prefix: "light/" });
+    readme = readme.replace(/<img src="assets\/gen\/([^"]+)"([^>]*)\/>/g, (tag, path, rest) => {
+      const lightPath = `assets/gen/light/${path}`;
+      // images that look the same in both modes (e.g. a kept banner) are not duplicated
+      if (!alt.files[lightPath] || alt.files[lightPath] === files[`assets/gen/${path}`]) return tag;
+      files[lightPath] = alt.files[lightPath];
+      return `<picture><source media="(prefers-color-scheme: light)" srcset="${lightPath}" />${tag}</picture>`;
+    });
+  }
+  return { files, readme };
+}
+
+function renderPass(cfg, data, assets, { theme, light, prefix }) {
+  const { catalog, images = {} } = assets;
+  const fontOf = (name) => assets.fonts?.[name] ?? fail(`font "${name}": fonts/${name}.json not found`);
+  const p = painter(theme, fontOf(cfg.theme.font));
   const files = {}, blocks = [];
-  const put = (path, svg) => { files[`assets/gen/${path}`] = svg; return `assets/gen/${path}`; };
+  const put = (path, svg) => { files[`assets/gen/${prefix}${path}`] = svg; return `assets/gen/${path}`; };
   const img = (src, alt, attrs) => `<img src="${src}" alt="${esc(alt)}" ${attrs} />`;
+  const link = (url, html) => (url ? `<a href="${esc(url)}">${html}</a>` : html);
   // Wrapped in <p> so GitHub adds the usual paragraph spacing below images.
   const para = (html) => `<p>${html}</p>`;
   const headingBlock = (m, title, small = false, key = "heading") =>
     title ? para(img(put(`${m.id}/${key}.svg`, heading(p, theme, title, small)), title, 'width="100%"')) : "";
   const join = (...parts) => parts.filter(Boolean).join("\n\n");
+  const cardRow = (cards) => `<p>\n${cards.join("\n")}\n</p>`;
+  const checkLink = (m, url, what) => {
+    if (url && !LINK.test(url)) fail(`${m.id}: ${what} must start with https://, http:// or mailto:`);
+  };
+  const fullCard = (m, svg, alt, file = "card") => para(img(put(`${m.id}/${file}.svg`, svg), alt, 'width="100%"'));
 
   for (const m of cfg.layout) {
     const o = m.opt;
     switch (m.type) {
       case "banner": {
-        const image = o.image && o.image !== "none" ? assets.images[o.image] : null;
-        if (o.image && o.image !== "none" && !image) throw new Error(`banner.image: assets/src/${o.image} not found`);
-        blocks.push(`<p align="center">\n  ${img(put(`${m.id}/banner.svg`, bannerSvg(p, theme, o, image)), o.title || "Banner", 'width="100%"')}\n</p>`);
+        const image = o.image !== "none" ? images[mediaPath(o.image)] : null;
+        if (o.image !== "none" && !image) {
+          fail(isVideo(o.image) ? `banner.image: ${o.image} is not converted yet (run node scripts/build.mjs with ffmpeg installed)`
+            : `banner.image: assets/src/${o.image} not found`);
+        }
+        // Light mode keeps the dark banner unless banner.light = adapt.
+        const adapt = light && o.light === "adapt";
+        const t = adapt ? theme : cfg.theme;
+        const svg = bannerSvg(painter(t, fontOf(o.font === "theme" ? cfg.theme.font : o.font)), t, o, image, adapt);
+        blocks.push(`<p align="center">\n  ${img(put(`${m.id}/banner.svg`, svg), o.title || "Banner", 'width="100%"')}\n</p>`);
         break;
       }
       case "text":
@@ -130,18 +202,18 @@ export function render(cfg, data, assets) {
         const repos = pickRepos(data, o);
         if (!repos.length && o.empty === "hide") break; // appears by itself once there is a repo to show
         const cards = repos.length
-          ? repos.map((r) => `<a href="${esc(r.url)}">${img(put(`${m.id}/${r.name}.svg`, projectCard(p, theme, r)), r.name, 'width="49%"')}</a>`)
+          ? repos.map((r) => link(r.url, img(put(`${m.id}/${r.name}.svg`, projectCard(p, theme, r)), r.name, 'width="49%"')))
           : [img(put(`${m.id}/none.svg`, placeholderCard(p, theme, "NO PUBLIC PROJECTS YET", 430, 132)), "No public projects yet", 'width="49%"')];
-        blocks.push(join(headingBlock(m, o.title), `<p>\n${cards.join("\n")}\n</p>`));
+        blocks.push(join(headingBlock(m, o.title), cardRow(cards)));
         break;
       }
       case "releases": {
         const rels = pickReleases(data, o);
         if (!rels.length && o.empty === "hide") break; // appears by itself with the first public release
         const cards = rels.length
-          ? rels.map((r) => `<a href="${esc(r.url)}">${img(put(`${m.id}/${r.repo}.svg`, releaseCard(p, theme, r)), `${r.repo} ${r.tag}`, 'width="49%"')}</a>`)
+          ? rels.map((r) => link(r.url, img(put(`${m.id}/${r.repo}.svg`, releaseCard(p, theme, r)), `${r.repo} ${r.tag}`, 'width="49%"')))
           : [img(put(`${m.id}/none.svg`, placeholderCard(p, theme, "NO RELEASES YET")), "No releases yet", 'width="49%"')];
-        blocks.push(join(headingBlock(m, o.title), `<p>\n${cards.join("\n")}\n</p>`));
+        blocks.push(join(headingBlock(m, o.title), cardRow(cards)));
         break;
       }
       case "stats":
@@ -159,33 +231,97 @@ export function render(cfg, data, assets) {
           return { k, url, label };
         });
         const bad = links.filter((l) => !catalog.icons[l.k]).map((l) => l.k);
-        if (bad.length) throw new Error(`${m.id}.items: unknown icon(s) ${bad.join(", ")}`);
+        if (bad.length) fail(`${m.id}.items: unknown icon(s) ${bad.join(", ")}`);
         const badUrl = links.filter((l) => !LINK.test(l.url)).map((l) => l.k);
-        if (badUrl.length) throw new Error(`${m.id}.items: links must start with https://, http:// or mailto: (${badUrl.join(", ")})`);
+        if (badUrl.length) fail(`${m.id}.items: links must start with https://, http:// or mailto: (${badUrl.join(", ")})`);
         if (!links.length) break;
         const tiles = links.map(({ k, url, label }, i) => {
           const icon = label ? { ...catalog.icons[k], label: label.toUpperCase() } : catalog.icons[k];
           const t = tile(p, theme, icon, o.tile);
           const file = label ? `${m.id}/link-${i + 1}.svg` : `tiles/${o.tile}/${k}.svg`;
-          return `  <a href="${esc(url)}">${img(put(file, t.svg), icon.label, `height="${Math.round((o.size * t.h) / 132)}"`)}</a>`;
+          return "  " + link(url, img(put(file, t.svg), icon.label, `height="${Math.round((o.size * t.h) / 132)}"`));
         });
-        blocks.push(join(headingBlock(m, o.title), `<p>\n${tiles.join("\n")}\n</p>`));
+        blocks.push(join(headingBlock(m, o.title), cardRow(tiles)));
         break;
       }
       case "people": {
         const entries = splitPeople(o.items);
         if (!entries.length) break;
         const cards = entries.map((e, i) => {
-          if (e.url && !LINK.test(e.url)) throw new Error(`${m.id}.items: "${e.name}" link must start with https://, http:// or mailto:`);
-          const login = e.image.startsWith("gh:") ? e.image.slice(3) : null;
-          if (e.image && !login && !catalog.icons[e.image]) throw new Error(`${m.id}.items: "${e.name}" image "${e.image}" is neither gh:<login> nor an icon`);
-          const svg = personCard(p, theme, e, login ? assets.avatars?.[login] : null, login ? null : catalog.icons[e.image]);
-          const image = img(put(`${m.id}/${i + 1}.svg`, svg), [e.name, e.role].filter(Boolean).join(", "), 'width="49%"');
-          return e.url ? `<a href="${esc(e.url)}">${image}</a>` : image;
+          checkLink(m, e.url, `"${e.name}" link`);
+          let pic = {};
+          if (e.image.startsWith("gh:")) pic = { avatar: images[`data/avatars/${e.image.slice(3)}`] }; // initials until fetched
+          else if (e.image.startsWith("file:")) {
+            const file = e.image.slice(5);
+            if (!MEDIA_FILE.test(file) || isVideo(file)) fail(`${m.id}.items: "${e.name}" image file:${file} must be a png/jpg/webp/gif in assets/src`);
+            pic = { logo: images[`assets/src/${file}`] ?? fail(`${m.id}.items: assets/src/${file} not found`) };
+          } else if (e.image) pic = { icon: catalog.icons[e.image] ?? fail(`${m.id}.items: "${e.name}" image "${e.image}" is neither gh:<login>, file:<name> nor an icon`) };
+          const svg = personCard(p, theme, e, pic);
+          return link(e.url, img(put(`${m.id}/${i + 1}.svg`, svg), [e.name, e.role].filter(Boolean).join(", "), 'width="49%"'));
         });
-        blocks.push(join(headingBlock(m, o.title), `<p>\n${cards.join("\n")}\n</p>`));
+        blocks.push(join(headingBlock(m, o.title), cardRow(cards)));
         break;
       }
+      case "now": {
+        const rows = splitRows(o.items, 2);
+        if (rows.length) blocks.push(join(headingBlock(m, o.title), fullCard(m, nowCard(p, theme, rows, o.cursor === "on"), rows.map((r) => r.join(": ")).join("; "))));
+        break;
+      }
+      case "timeline": {
+        const rows = splitRows(o.items, 3);
+        if (rows.length) blocks.push(join(headingBlock(m, o.title), fullCard(m, timelineCard(p, theme, rows), rows.map((r) => r.filter(Boolean).join(" ")).join("; "))));
+        break;
+      }
+      case "feed": {
+        const items = pickFeed(data, o);
+        if (!items.length && o.empty === "hide") break; // appears with the first fetched entry
+        const cards = items.length
+          ? items.map((it, i) => {
+            if (!LINK.test(it.url)) return "";
+            const thumb = o.thumbs === "on" && THUMB.test(it.thumb) ? images[it.thumb] : null;
+            return link(it.url, img(put(`${m.id}/${i + 1}.svg`, feedCard(p, theme, it, thumb)), it.title, 'width="49%"'));
+          })
+          : [img(put(`${m.id}/none.svg`, placeholderCard(p, theme, "NOTHING POSTED YET")), "Nothing posted yet", 'width="49%"')];
+        blocks.push(join(headingBlock(m, o.title), cardRow(cards.filter(Boolean))));
+        break;
+      }
+      case "twitch": {
+        const live = data.live?.[o.channel.toLowerCase()] ?? data.live?.["*"];
+        if (!live?.live && o.offline === "hide") break; // only visible while live
+        blocks.push(join(headingBlock(m, o.title),
+          para(link(`https://www.twitch.tv/${o.channel}`, img(put(`${m.id}/live.svg`, liveCard(p, theme, live, o.channel.toUpperCase())),
+            live?.live ? `Live on Twitch: ${live.title || o.channel}` : `Twitch: ${o.channel} (offline)`, 'width="100%"')))));
+        break;
+      }
+      case "gists": {
+        const gists = (data.gists?.[o.mode] || []).slice(0, o.limit);
+        if (!gists.length && o.empty === "hide") break;
+        const cards = gists.length
+          ? gists.map((g, i) => link(g.url, img(put(`${m.id}/${i + 1}.svg`, projectCard(p, theme, g)), g.name, 'width="49%"')))
+          : [img(put(`${m.id}/none.svg`, placeholderCard(p, theme, "NO PUBLIC GISTS YET")), "No public gists yet", 'width="49%"')];
+        blocks.push(join(headingBlock(m, o.title), cardRow(cards)));
+        break;
+      }
+      case "code": {
+        if (!o.code.trim()) break;
+        checkLink(m, o.link, "code.link");
+        blocks.push(join(headingBlock(m, o.title), para(link(o.link, img(put(`${m.id}/code.svg`, codeCard(p, theme, o.file, o.code)), `Code: ${o.file}`, 'width="100%"')))));
+        break;
+      }
+      case "guestbook": {
+        if (!o.issue) break; // not set up yet
+        const g = data.guestbook, ours = g && (g.issue === o.issue || g.issue === "*");
+        const entries = (ours ? g.entries : []).filter((e) => o.approval === "all" || e.approved).slice(0, o.limit);
+        const url = data.repo ? `https://github.com/${data.repo}/issues/${o.issue}` : "";
+        blocks.push(join(headingBlock(m, o.title),
+          para(link(url, img(put(`${m.id}/guestbook.svg`, guestbookCard(p, theme, entries)), "Guestbook: click to sign", 'width="100%"')))));
+        break;
+      }
+      case "counter":
+        if (!o.url) break;
+        if (!/^https:\/\//i.test(o.url)) fail(`${m.id}.url must start with https://`);
+        blocks.push(join(headingBlock(m, o.title), para(img(esc(o.url), "Visitor counter", `height="${o.height}"`))));
+        break;
       case "divider":
         blocks.push(para(img(put(`${m.id}/divider.svg`, dividerSvg(theme)), "", 'width="100%"')));
         break;
@@ -196,6 +332,8 @@ export function render(cfg, data, assets) {
     blocks.filter(Boolean).join("\n\n") + "\n";
   return { files, readme };
 }
+
+function fail(message) { throw new Error(message); }
 
 /** Fake GitHub data for local previews (python-free, deterministic). */
 export const SAMPLE_DATA = (() => {
@@ -209,8 +347,26 @@ export const SAMPLE_DATA = (() => {
     name, description, language, stars, pushedAt, fork: false, url: "https://github.com",
     languages: { [language]: 1000 * (stars + 3) }, release,
   });
+  const gist = (name, description, language, stars) => ({ name, description, language, stars, url: "https://gist.github.com" });
+  const video = (title, date) => ({ title, date, url: `https://www.youtube.com/#${date}`, source: "YOUTUBE", thumb: "" });
   return {
-    login: "sample", followers: 5, commits: 1280,
+    login: "sample", repo: "sample/sample", followers: 5, commits: 1280,
+    // "*" = used for any feed source / Twitch channel / guestbook issue in the preview
+    feeds: { "*": [video("Building a dot-matrix GitHub profile from scratch", "2026-10-30"),
+      video("Homelab tour 2026: TrueNAS, Docker and WireGuard", "2026-10-12"),
+      video("Godot jam devlog #3 - lights, sound and a lot of bugs", "2026-09-28"),
+      video("CachyOS after one year", "2026-09-02")] },
+    live: { "*": { live: true, title: "Coding a dot-matrix font renderer", game: "Software and Game Development" } },
+    gists: {
+      pinned: [gist("led-font.js", "Tiny 5x7 LED font as JSON glyph grids.", "JavaScript", 4),
+        gist("wg-setup.sh", "WireGuard on TrueNAS in five commands.", "Shell", 2)],
+      recent: [gist("notes.md", "Uni notes, algorithms and data structures.", "Markdown", 0)],
+    },
+    guestbook: { issue: "*", entries: [
+      { login: "octocat", text: "Love the LED style, very clean!", date: "2026-10-29", approved: true },
+      { login: "lumi-dev", text: "Hello from the homelab channel 👋", date: "2026-10-21", approved: true },
+      { login: "spam-bot", text: "not approved, only shown with approval = all", date: "2026-10-20", approved: false },
+    ] },
     pinned: ["homelab-dashboard", "lumi", "dotfiles"],
     calendar: { total: 742, weeks },
     repos: [
