@@ -7,4 +7,4 @@
 banner_title = MATREXX
 
 # Darkness of the soft shadow around the banner letters, 0 (off) to 100.
-banner_shadow = 40
+banner_shadow = 60

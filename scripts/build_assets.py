@@ -80,7 +80,7 @@ def tile(path, label):
                f'<g transform="translate({(width - 48) / 2} 22) scale(2)" fill="#fff"><path d="{path}"/></g>{text}')
 
 
-def banner(title, shadow_pct=40):
+def banner(title, shadow_pct=60):
     """1600x420 JPEG with `title` in the large dot font.
     shadow_pct: darkness of the shadow around the letters, 0 = off, 100 = black.
     Drawn at 2x and scaled down for smooth dots."""
@@ -118,7 +118,7 @@ def banner(title, shadow_pct=40):
     # Shadow that follows the letter shapes: dot circles just large enough to
     # merge into continuous strokes, then blurred so it fades evenly within a
     # few pixels. Separates the dots from the grid without a dark area.
-    shadow = circles(pitch * 0.58, int(2.55 * shadow_pct)).filter(ImageFilter.GaussianBlur(3 * S))
+    shadow = circles(pitch * 0.6, int(2.55 * shadow_pct)).filter(ImageFilter.GaussianBlur(3.5 * S))
     img = Image.composite(Image.new("L", img.size, 0), img, shadow)
     img = Image.composite(Image.new("L", img.size, 255), img, circles(r, 255)).convert("RGB")
     img.resize((W, H), Image.LANCZOS).save(ASSETS / "banner.jpg", quality=92)
@@ -130,7 +130,7 @@ def main():
     args = parser.parse_args()
     settings = read_settings()
     title = args.title or settings.get("banner_title", "MATREXX")
-    shadow_pct = int(settings.get("banner_shadow", 40))
+    shadow_pct = int(settings.get("banner_shadow", 60))
 
     (ASSETS / "headings").mkdir(parents=True, exist_ok=True)
     (ASSETS / "icons").mkdir(parents=True, exist_ok=True)
