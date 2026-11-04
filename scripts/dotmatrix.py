@@ -109,11 +109,12 @@ def layout(text, pitch, font=SMALL, gap=1, shear=SHEAR):
     return points, width, (rows - 1) * pitch
 
 
-def svg_text(text, x, y, pitch, r, fill, anchor="start"):
+def svg_text(text, x, y, pitch, r, fill, anchor="start", gap=1):
     """SVG <g> of circles. (x, y) is the top-left (or top-right with
     anchor="end") corner of the text including the dot radius.
+    gap: empty columns between letters (fractions allowed).
     Returns (svg, total_width, total_height)."""
-    points, w, h = layout(text, pitch)
+    points, w, h = layout(text, pitch, gap=gap)
     if anchor == "end":
         x -= w + 2 * r
     circles = "".join(f'<circle cx="{x + px + r:.1f}" cy="{y + py + r:.1f}" r="{r}"/>' for px, py in points)

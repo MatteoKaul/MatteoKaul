@@ -18,13 +18,33 @@ icon_size = 100
 # remove a key to hide it, add one to show it. Any key works in either list.
 # Full list: python scripts/build_assets.py --list
 #
-# Languages: c, cpp, csharp, java, javascript, typescript, python, sql, go,
-#   rust, kotlin, php, html, css, bash, swift, dart, lua, r, ruby, haskell,
-#   zig, scala
-# Systems & tools: macos, windows, linux, cachyos, archlinux, ubuntu, debian,
-#   fedora, raspberrypi, truenas, proxmox, docker, kubernetes, git, github,
-#   gitlab, cmake, nginx, mysql, postgresql, sqlite, mariadb, nodejs, react,
-#   arduino, neovim, vim, latex, android, godot, unity
+# Languages: c, cpp, csharp, java, javascript, typescript, python, sql, go, rust,
+#   kotlin, swift, dart, php, ruby, lua, r, scala, haskell, elixir,
+#   erlang, clojure, fsharp, ocaml, julia, perl, zig, nim, crystal,
+#   fortran, solidity, wasm, bash, html, css, graphql, markdown, json,
+#   yaml, latex
+# Frameworks: react, vue, angular, svelte, nextjs, nodejs, deno, bun, express, nestjs,
+#   django, flask, fastapi, spring, laravel, rails, dotnet, tailwind,
+#   bootstrap, qt, tensorflow, pytorch, numpy, pandas, jupyter, opencv
+# Build: cmake, make, gradle, maven, bazel, llvm, gnu, npm, pnpm, yarn, vite,
+#   webpack
+# Os: macos, windows, linux, cachyos, archlinux, ubuntu, debian, fedora,
+#   nixos, manjaro, mint, opensuse, alpine, centos, rocky, kali, popos,
+#   endeavouros, gentoo, freebsd, raspberrypi, truenas, unraid,
+#   synology, proxmox, ios, android
+# Devops: docker, podman, kubernetes, portainer, ansible, terraform, vagrant,
+#   jenkins, ghactions, git, github, gitlab, nginx, traefik, cloudflare,
+#   wireguard, tailscale, openwrt, pfsense, opnsense, vmware,
+#   virtualbox, qemu, grafana, prometheus
+# Databases: mysql, postgresql, sqlite, mariadb, redis, mongodb, influxdb, elastic,
+#   kafka, rabbitmq
+# Cloud: gcp, digitalocean, hetzner, vercel, netlify, firebase, supabase
+# Editors: neovim, vim, emacs, intellij, pycharm, clion, webstorm, eclipse, xcode,
+#   androidstudio, zsh, tmux, alacritty, iterm2, wezterm, ghostty
+# Hardware: arduino, esp32, esphome, platformio, nvidia, amd, intel
+# Apps: homeassistant, nextcloud, jellyfin, plex, figma, blender, obs, postman,
+#   jira, notion, obsidian, discord, steam, godot, unity, claude,
+#   ollama, huggingface
 languages = c, javascript, typescript, java, python
 systems = macos, cachyos, windows, ubuntu, raspberrypi, truenas, docker
 

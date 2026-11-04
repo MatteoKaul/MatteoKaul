@@ -48,18 +48,28 @@ def heading(label):
     return svg_doc(width, height, f'<rect width="{width}" height="{height}" rx="10" fill="#000"/>{text}')
 
 
-def tile(logo, label):
-    """168x132 tile: logo (24x24 SVG markup scaled 2x) on top, label centred below.
-    Long labels get a smaller pitch so they always fit with 10px margin."""
+def tile(icon):
+    """168x132 tile: logo on top, label centred below.
+
+    The logo is SVG markup in a 24x24 box, drawn 2x (48px) or larger when the
+    icon sets "scale" (wordmark logos like Intel need more width to be legible).
+    Labels over 8 letters get tighter letter spacing and, if still too wide,
+    a smaller pitch, so they always fit with an 8px margin."""
     width, height = 168, 132
-    _, unit_w, _ = layout(label, 1)  # width at pitch 1 scales linearly
-    pitch = min(3.0, (width - 20) / (unit_w + 1))
+    label = icon["label"]
+    gap = 0.6 if len(label) > 8 else 1
+    _, unit_w, _ = layout(label, 1, gap=gap)  # width at pitch 1 scales linearly
+    pitch = min(3.0, (width - 16) / (unit_w + 0.8))
     r = round(pitch * 0.4, 2)
-    _, w, h = layout(label, pitch)
-    text, _, _ = svg_text(label, (width - w - 2 * r) / 2, 112 - (h + 2 * r) / 2, pitch, r, "#e0e0e0")
+    _, w, h = layout(label, pitch, gap=gap)
+    text, _, _ = svg_text(label, (width - w - 2 * r) / 2, 112 - (h + 2 * r) / 2, pitch, r, "#e0e0e0", gap=gap)
+
+    size = 48 * icon.get("scale", 1)  # rendered logo size in px, centred on (84, 46)
+    logo = (f'<g transform="translate({(width - size) / 2:.1f} {46 - size / 2:.1f}) scale({size / 24:.3f})" '
+            f'fill="#fff">{icon["svg"]}</g>')
     return svg_doc(width, height,
-               f'<rect x=".5" y=".5" width="{width - 1}" height="{height - 1}" rx="12" fill="#000" stroke="#2a2a2a"/>'
-               f'<g transform="translate({(width - 48) / 2} 22) scale(2)" fill="#fff">{logo}</g>{text}')
+                   f'<rect x=".5" y=".5" width="{width - 1}" height="{height - 1}" rx="12" fill="#000" '
+                   f'stroke="#2a2a2a"/>{logo}{text}')
 
 
 def banner(title, shadow_pct=60):
@@ -124,7 +134,8 @@ def update_readme(sections, height):
 
 
 def list_icons():
-    for group in ICON_SECTIONS:
+    """Print the catalog grouped like icons.json (any key works in any list)."""
+    for group in dict.fromkeys(v["group"] for v in ICONS.values()):
         print(f"{group}: " + ", ".join(k for k, v in ICONS.items() if v["group"] == group))
 
 
@@ -154,7 +165,7 @@ def main():
         if old.stem not in enabled:
             old.unlink()
     for key in enabled:
-        (icon_dir / f"{key}.svg").write_text(tile(ICONS[key]["svg"], ICONS[key]["label"]))
+        (icon_dir / f"{key}.svg").write_text(tile(ICONS[key]))
 
     update_readme(sections, icon_size)
     banner(title, shadow_pct)
