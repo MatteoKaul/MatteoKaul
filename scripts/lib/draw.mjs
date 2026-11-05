@@ -9,77 +9,43 @@ export const CARD_W = 880; // width of headings and full-width cards
 // ----------------------------------------------------------- dot drawing --
 
 /**
- * Diagonal bridge interpolation for LED dot-matrix rendering.
+ * Compute LED dot centres for a single character on an `rows × cols` matrix.
  *
- * Why this is needed:
- *   1. On a discrete grid, a diagonal stroke moving from (c, r) to (c ± 1, r + 1)
- *      has Euclidean distance √2 · pitch ≈ 1.414 · pitch, whereas horizontal and
- *      vertical strokes have distance 1.0 · pitch.
- *   2. When italic slant (`slant > 0`) is applied, each row r shifts horizontally by
- *      `(rows - 1 - r) * slant * pitch`. A down-right diagonal `c -> c + 1` then spans
- *      `Δx = (1 - slant) * pitch`, while a down-left diagonal `c -> c - 1` (like the
- *      left leg of "A" or right inner diagonal of "M") spans `Δx = (-1 - slant) * pitch`,
- *      stretching the Euclidean gap up to √((1 + slant)² + 1) · pitch ≈ 1.58 · pitch!
- *
- * To guarantee homogeneous, gap-free dot density on all straight, oblique, and diagonal
- * paths across every font family and any slant angle, we detect true diagonal steps
- * (where adjacent orthogonal cells are empty) and insert intermediate bridge LED dots
- * along the exact slanted Euclidean segment whenever the step exceeds 1.08 · pitch.
+ * Strictly preserves the classic sparse LED dot count (1 dot per row per stroke;
+ * NEVER inserts extra half-row dots). For diagonal/oblique characters ("A", "M",
+ * "V", "W", "X", "R", "N", "K", "Y", "Z"), `font.points[ch]` provides smooth
+ * sub-grid horizontal coordinates `[c, r]` on each row `r = 0..rows-1` so that
+ * diagonal strokes transition smoothly without full-column integer staircase jumps.
  */
-function glyphPoints(grid, rows, cols, pitch, slant) {
-  const has = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols && grid[r]?.[c] === "1";
+function glyphPoints(ch, font, pitch, slant) {
+  const { rows, glyphs, points: subPoints, points_upright: uprightPoints } = font;
   const pt = (c, r) => [c * pitch + (rows - 1 - r) * pitch * slant, r * pitch];
-  const raw = [];
 
+  const activePoints = Math.abs(slant) < 0.08 && uprightPoints?.[ch] ? uprightPoints[ch] : subPoints?.[ch];
+  if (activePoints) {
+    return activePoints.map(([c, r]) => pt(c, r));
+  }
+
+  const grid = glyphs[ch];
+  if (!grid) return [];
+  const raw = [];
   for (let r = 0; r < rows; r++) {
     const row = grid[r] || "";
     for (let c = 0; c < row.length; c++) {
-      if (row[c] !== "1") continue;
-      const [x0, y0] = pt(c, r);
-      raw.push([x0, y0]);
-
-      // Check downward diagonal neighbors: (r + 1, c - 1) and (r + 1, c + 1)
-      for (const dc of [-1, 1]) {
-        const nr = r + 1, nc = c + dc;
-        if (!has(nr, nc)) continue;
-        // Only bridge true diagonal strokes (not solid 2x2 blocks where both orthogonal neighbors are filled)
-        const orthoCount = (has(r, nc) ? 1 : 0) + (has(nr, c) ? 1 : 0);
-        if (orthoCount === 2) continue;
-
-        const [x1, y1] = pt(nc, nr);
-        const dist = Math.hypot(x1 - x0, y1 - y0);
-        // Subdivide diagonal segment so Euclidean spacing matches orthogonal pitch (<= 1.05 * pitch)
-        const steps = Math.max(2, Math.ceil(dist / (pitch * 0.95)));
-        for (let s = 1; s < steps; s++) {
-          const t = s / steps;
-          raw.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]);
-        }
-      }
+      if (row[c] === "1") raw.push(pt(c, r));
     }
   }
-
-  // Deduplicate points that are closer than 0.32 * pitch to prevent overlapping double-bright blobs
-  const minDistSq = (pitch * 0.32) ** 2;
-  const out = [];
-  for (const p of raw) {
-    if (!out.some((q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 < minDistSq)) {
-      out.push(p);
-    }
-  }
-  return out;
+  return raw;
 }
 
 /** Dot centres for `text`. pitch = dot spacing, gap = empty columns between letters. */
 function layout(text, pitch, font, { gap = 1, slant = 0.22 } = {}) {
-  const { rows, cols, glyphs } = font;
+  const { rows, cols } = font;
   const points = [];
   let x = 0;
   for (const ch of String(text).toUpperCase()) {
-    const g = glyphs[ch];
-    if (g) {
-      for (const [px, py] of glyphPoints(g, rows, cols, pitch, slant)) {
-        points.push([x + px, py]);
-      }
+    for (const [px, py] of glyphPoints(ch, font, pitch, slant)) {
+      points.push([x + px, py]);
     }
     x += (cols + gap) * pitch;
   }
