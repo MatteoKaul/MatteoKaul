@@ -36,8 +36,28 @@ Done (branch `claude/clever-feynman-cj0nr1`, not merged to `main` yet):
 - Icon catalog: 288 logos in 24 categories (`scripts/icons.json`) incl.
   support/funding (Patreon, Ko-fi, Sponsors, PayPal, ...) and business
   (company, shop, imprint, Gumroad, Shopify, Etsy)
-- Modules: banner, text, icons, projects, releases, stats, activity, socials,
-  people, now, timeline, feed, twitch, gists, code, guestbook, counter, divider
+- Modules: banner, text, icons, projects, contributed, releases, stats, followers,
+  spoken, portfolio, steam, activity, socials, people, now, timeline, feed,
+  twitch, gists, code, guestbook, counter, divider
+- Module 1 (UI/UX, Typography & Editor):
+  - Strict separation of **Font Family** (`theme.font`: `led`, `micro`, `inter`, `roboto`, `jetbrains`, `sans`) and **Renderer Style** (`theme.style` / `banner.style`: `led` dot-matrix vs. `standard` solid vector contours), enabling LED dot-matrix rendering on any font family
+  - Diagonal LED gap & slant bugfix (`glyphPoints` in `scripts/lib/draw.mjs`): Euclidean bridge interpolation eliminates pixel-shifting and gaps on diagonal strokes (`A`, `M`, `V`, `W`, `N`, `K`, `X`, `Z`) across all fonts and italic slant angles
+  - Colour presets extended with **Purple** (`#b877ff`) plus a dedicated free Font Colour Picker (supporting both `#rrggbb` Hex and `rgb(r, g, b)` input)
+  - Prominent Repository Secrets warning boxes + step-by-step guide modal (`Settings -> Secrets and variables -> Actions -> New repository secret`) and validation against accidental plaintext secrets in `settings.txt`
+  - Global (`theme.animation_speed`) and per-component (`banner.animation_speed`, `twitch.animation_speed`, `now.animation_speed`) animation speed sliders and presets
+  - Dynamic Icon Grid: 2-mode single-icon group handling (`icons.dissolve_single = keep | more | hide` — *Dissolve into "More"* or *Hide*), automatic & manual 2x double-width tiles (`icons.double_mode`, `icons.double_items`), and Layout Continuity switch (`icons.continuity = unified | granular` with `icons.col_spans`)
+- Module 2 (Privacy-First Portfolio & Asset Tracker):
+  - Zero-Knowledge client-side conversion of absolute €/$ inputs into percentage weights (`portfolio.allocations`), rejecting currency values in `settings.txt`
+  - Chain-linked Time-Weighted Return (TWR) index (`Start = 100.00`) in `scripts/market.mjs` & `scripts/lib/sources.mjs`, preserving history across rebalancings
+  - 7-day threshold lock, Donut/Stacked Bar/Treemap allocation charts, YTD/1w/1m/1y/Custom timeframes, Linear (%)/Log Y-axis scaling, and mandatory disclaimer (`Keine Anlageberatung. Alle Angaben ohne Gewähr.`)
+- Module 3 (Steam Profile Integration):
+  - `scripts/steam.mjs` (`IPlayerService/GetOwnedGames` via `STEAM_API_KEY`) with daily `playtime_forever` snapshots (`data/steam.json`) for exact 7-day and 30-day deltas
+  - Flexible presets (`top5`, `top10`, `custom5`, `custom10`), metric selector (`total`, `period`, `both`), and exclusion filter (`steam.exclude`) with automatic rank promotion
+- Module 4 (Extended GitHub & Profile Metrics):
+  - Profile Views (`counter` with fallback/static badge support), Spoken Languages (`spoken`), GitHub Followers (`followers`), and Projects I Participate In (`contributed` via GraphQL `repositoriesContributedTo`)
+- Module 5 (CI/CD, Auto-Release & Fork/Template Hygiene):
+  - Neutral fallback configs (`default.config.json` & `default.settings.txt`)
+  - `.github/workflows/editor-release.yml` with path filter (`editor/**`), Conventional Commits Semantic Versioning, multi-OS builds (macOS ARM64, Windows x64, Linux x64/ARM64), and Fork Guard (`if: github.repository == 'MatteoKaul/MatteoKaul' || github.repository == 'MatteoKaul/Homespace'`)
 - Projects / releases / feed / gists hide themselves until there is data
 - Theme: dark / light / auto (`<picture>`), palette auto from fg/bg +
   contrast, colour presets in the editor, dot shape/size, slant, radius,

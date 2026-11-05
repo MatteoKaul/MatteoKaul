@@ -2,11 +2,72 @@
 //
 // Everything is drawn from a theme (colours, dot shape/size, slant) and a
 // font (glyph grids from fonts/*.json, "1" = dot). Functions return SVG text.
-import { rgb } from "./settings.mjs";
+import { rgb, splitList, splitPairs } from "./settings.mjs";
 
 export const CARD_W = 880; // width of headings and full-width cards
 
 // ----------------------------------------------------------- dot drawing --
+
+/**
+ * Diagonal bridge interpolation for LED dot-matrix rendering.
+ *
+ * Why this is needed:
+ *   1. On a discrete grid, a diagonal stroke moving from (c, r) to (c ± 1, r + 1)
+ *      has Euclidean distance √2 · pitch ≈ 1.414 · pitch, whereas horizontal and
+ *      vertical strokes have distance 1.0 · pitch.
+ *   2. When italic slant (`slant > 0`) is applied, each row r shifts horizontally by
+ *      `(rows - 1 - r) * slant * pitch`. A down-right diagonal `c -> c + 1` then spans
+ *      `Δx = (1 - slant) * pitch`, while a down-left diagonal `c -> c - 1` (like the
+ *      left leg of "A" or right inner diagonal of "M") spans `Δx = (-1 - slant) * pitch`,
+ *      stretching the Euclidean gap up to √((1 + slant)² + 1) · pitch ≈ 1.58 · pitch!
+ *
+ * To guarantee homogeneous, gap-free dot density on all straight, oblique, and diagonal
+ * paths across every font family and any slant angle, we detect true diagonal steps
+ * (where adjacent orthogonal cells are empty) and insert intermediate bridge LED dots
+ * along the exact slanted Euclidean segment whenever the step exceeds 1.08 · pitch.
+ */
+function glyphPoints(grid, rows, cols, pitch, slant) {
+  const has = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols && grid[r]?.[c] === "1";
+  const pt = (c, r) => [c * pitch + (rows - 1 - r) * pitch * slant, r * pitch];
+  const raw = [];
+
+  for (let r = 0; r < rows; r++) {
+    const row = grid[r] || "";
+    for (let c = 0; c < row.length; c++) {
+      if (row[c] !== "1") continue;
+      const [x0, y0] = pt(c, r);
+      raw.push([x0, y0]);
+
+      // Check downward diagonal neighbors: (r + 1, c - 1) and (r + 1, c + 1)
+      for (const dc of [-1, 1]) {
+        const nr = r + 1, nc = c + dc;
+        if (!has(nr, nc)) continue;
+        // Only bridge true diagonal strokes (not solid 2x2 blocks where both orthogonal neighbors are filled)
+        const orthoCount = (has(r, nc) ? 1 : 0) + (has(nr, c) ? 1 : 0);
+        if (orthoCount === 2) continue;
+
+        const [x1, y1] = pt(nc, nr);
+        const dist = Math.hypot(x1 - x0, y1 - y0);
+        // Subdivide diagonal segment so Euclidean spacing matches orthogonal pitch (<= 1.05 * pitch)
+        const steps = Math.max(2, Math.ceil(dist / (pitch * 0.95)));
+        for (let s = 1; s < steps; s++) {
+          const t = s / steps;
+          raw.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]);
+        }
+      }
+    }
+  }
+
+  // Deduplicate points that are closer than 0.32 * pitch to prevent overlapping double-bright blobs
+  const minDistSq = (pitch * 0.32) ** 2;
+  const out = [];
+  for (const p of raw) {
+    if (!out.some((q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 < minDistSq)) {
+      out.push(p);
+    }
+  }
+  return out;
+}
 
 /** Dot centres for `text`. pitch = dot spacing, gap = empty columns between letters. */
 function layout(text, pitch, font, { gap = 1, slant = 0.22 } = {}) {
@@ -14,18 +75,46 @@ function layout(text, pitch, font, { gap = 1, slant = 0.22 } = {}) {
   const points = [];
   let x = 0;
   for (const ch of String(text).toUpperCase()) {
-    (glyphs[ch] || []).forEach((row, r) => {
-      for (let c = 0; c < row.length; c++) {
-        if (row[c] === "1") points.push([x + c * pitch + (rows - 1 - r) * pitch * slant, r * pitch]);
+    const g = glyphs[ch];
+    if (g) {
+      for (const [px, py] of glyphPoints(g, rows, cols, pitch, slant)) {
+        points.push([x + px, py]);
       }
-    });
+    }
     x += (cols + gap) * pitch;
   }
   const width = Math.max(0, x - (gap + 1) * pitch + (rows - 1) * pitch * slant);
   return { points, width, height: (rows - 1) * pitch };
 }
 
+/** Solid vector layout for `style = "standard"`, using the font's normalized 100-unit vector contours. */
+function vectorLayout(text, targetH, vectorFont, { gap = 1, slant = 0.22 } = {}) {
+  const scale = targetH / (vectorFont.height || 100);
+  const letterGap = gap * 10 * scale;
+  const spaceAdv = (vectorFont.space || 32) * scale;
+  const paths = [];
+  let x = 0;
+  const str = String(text).toUpperCase();
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    const g = vectorFont.glyphs?.[ch];
+    if (g && g.d) {
+      const skew = slant ? ` skewX(${n(-Math.atan(slant) * (180 / Math.PI))})` : "";
+      const xShift = slant ? n(targetH * slant) : 0;
+      paths.push(`<path transform="translate(${n(x + xShift)} 0) scale(${scale.toFixed(4)})${skew}" d="${g.d}"/>`);
+      x += g.w * scale + (i < str.length - 1 ? letterGap : 0);
+    } else {
+      x += spaceAdv + (i < str.length - 1 ? letterGap : 0);
+    }
+  }
+  const width = Math.max(0, x + targetH * slant);
+  return { svgBody: paths.join(""), width, height: targetH };
+}
+
 const n = (v) => +v.toFixed(1); // keep SVG numbers short
+
+/** Effective animation speed multiplier (global theme speed * optional module speed). */
+const animSpeed = (theme, opt) => Math.max(0.1, (Number(theme?.animation_speed) || 1) * (Number(opt?.animation_speed) || 1));
 
 /** One <path> "d" drawing all dots, so the files stay small. */
 function dotPath(points, r, shape) {
@@ -43,15 +132,28 @@ export const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
 export const svgDoc = (w, h, body) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`;
 
-/** Drawing context bound to a theme and font. */
-export function painter(theme, font) {
+/** Drawing context bound to a theme and font (supports both "led" and "standard" renderer styles). */
+export function painter(theme, font, styleOverride) {
   const small = font.small, large = font.large || font.small;
+  const renderStyle = (styleOverride && styleOverride !== "theme" ? styleOverride : theme.style) || "led";
   // Small text keeps the height of a 7-row font whatever the font's rows are,
   // so layouts work with every font (micro: 5 rows -> 1.5x the pitch).
   const norm = 6 / (small.rows - 1);
 
-  /** Dot text. (x, y) = top-left corner incl. dot radius (top-right with anchor "end"). */
-  function text(str, x, y, { pitch, fill, anchor = "start", gap = 1, large: big = false, r } = {}) {
+  /** Render text in either LED dot-matrix style or solid Standard vector style. */
+  function text(str, x, y, { pitch, fill, anchor = "start", gap = 1, large: big = false, r, style: callStyle } = {}) {
+    const activeStyle = callStyle || renderStyle;
+    if (activeStyle === "standard" && font.vector) {
+      const effPitch = big ? pitch : pitch * norm;
+      const radius = r ?? effPitch * theme.dot;
+      const gridRows = (big ? large : small).rows;
+      const h = (gridRows - 1) * effPitch + 2 * radius;
+      const v = vectorLayout(str, h, font.vector, { gap, slant: theme.slant });
+      const w = v.width;
+      const ox = anchor === "end" ? x - w : anchor === "middle" ? x - w / 2 : x;
+      const svg = v.svgBody ? `<g fill="${fill}" transform="translate(${n(ox)} ${n(y)})">${v.svgBody}</g>` : "";
+      return { svg, w, h };
+    }
     if (!big) pitch *= norm;
     const radius = r ?? pitch * theme.dot;
     const { points, width, height } = layout(str, pitch, big ? large : small, { gap, slant: theme.slant });
@@ -62,8 +164,16 @@ export function painter(theme, font) {
   }
 
   /** Width of `str` at pitch 1 (scales linearly), for fitting. */
-  const unitWidth = (str, opts = {}) =>
-    layout(str, 1, opts.large ? large : small, { gap: opts.gap ?? 1, slant: theme.slant }).width * (opts.large ? 1 : norm);
+  const unitWidth = (str, opts = {}) => {
+    const activeStyle = opts.style || renderStyle;
+    if (activeStyle === "standard" && font.vector) {
+      const gridRows = (opts.large ? large : small).rows;
+      const effNorm = opts.large ? 1 : norm;
+      const h = (gridRows - 1) * effNorm + 2 * theme.dot * effNorm;
+      return vectorLayout(str, h, font.vector, { gap: opts.gap ?? 1, slant: theme.slant }).width;
+    }
+    return layout(str, 1, opts.large ? large : small, { gap: opts.gap ?? 1, slant: theme.slant }).width * (opts.large ? 1 : norm);
+  };
 
   /** Shorten str with a trailing "." until it fits maxWidth at this pitch. */
   function truncate(str, pitch, maxWidth) {
@@ -90,91 +200,137 @@ export function heading(p, theme, label, small = false) {
   return svgDoc(CARD_W, h, `<rect width="${CARD_W}" height="${h}" rx="${theme.radius}" fill="${theme.bg}"/>${t.svg}`);
 }
 
-const TILE_W = 168, TILE_H = 132;
+const TILE_W = 168, TILE_H = 132, TILE_GAP = 6;
 
 /**
  * One icon as a card, in one of three styles (all scale with the README):
- *   below  168x132, logo on top, label below (default)
- *   none   132x132, logo only
- *   badge  48 high, logo left, label right; width follows the label
+ *   below  168x132 (or 342x132 when doubleWidth = true), logo on top, label below
+ *   none   132x132 (or 270x132 when doubleWidth = true), logo only
+ *   badge  48 high, logo left, label right; width follows the label (or 2x min width)
  * Returns {w, h, body}; body is SVG without the <svg> wrapper.
  */
-export function tileParts(p, theme, icon, style = "below") {
+export function tileParts(p, theme, icon, style = "below", doubleWidth = false) {
   const logo = (size, cx, cy) => { // logos are 24x24 markup; wordmarks get a larger "scale"
     const s = size * (icon.scale || 1);
     return `<g transform="translate(${n(cx - s / 2)} ${n(cy - s / 2)}) scale(${(s / 24).toFixed(3)})" ` +
       `fill="${theme.fg}" color="${theme.fg}">${icon.svg}</g>`;
   };
-  if (style === "none") return { w: TILE_H, h: TILE_H, body: p.cardBody(TILE_H, TILE_H, logo(60, TILE_H / 2, TILE_H / 2)) };
+  if (style === "none") {
+    const w = doubleWidth ? TILE_H * 2 + TILE_GAP : TILE_H;
+    return { w, h: TILE_H, body: p.cardBody(w, TILE_H, logo(60, w / 2, TILE_H / 2)) };
+  }
   if (style === "badge") {
     const H = 48, label = p.text(icon.label, 0, 0, { pitch: 2.6, fill: theme.muted });
-    const w = Math.ceil(16 + 26 + 12 + label.w + 16);
+    const baseW = Math.ceil(16 + 26 + 12 + label.w + 16);
+    const w = doubleWidth ? Math.max(baseW * 2 + TILE_GAP, 280) : baseW;
     return { w, h: H, body: p.cardBody(w, H, logo(26, 16 + 13, H / 2) + `<g transform="translate(54 ${n((H - label.h) / 2)})">${label.svg}</g>`) };
   }
+  const W = doubleWidth ? TILE_W * 2 + TILE_GAP : TILE_W;
   // Long labels get tighter letter spacing, then a smaller pitch, so they always fit.
-  const gap = icon.label.length > 8 ? 0.6 : 1;
-  const pitch = Math.min(3.0, (TILE_W - 16) / (p.unitWidth(icon.label, { gap }) + 2 * theme.dot * p.norm));
-  const label = p.text(icon.label, TILE_W / 2, 0, { pitch, fill: theme.muted, gap, anchor: "middle" });
-  return { w: TILE_W, h: TILE_H, body: p.cardBody(TILE_W, TILE_H,
-    `${logo(48, TILE_W / 2, 46)}<g transform="translate(0 ${n(112 - label.h / 2)})">${label.svg}</g>`) };
+  const gap = icon.label.length > 8 && !doubleWidth ? 0.6 : 1;
+  const pitch = Math.min(3.0, (W - 16) / (p.unitWidth(icon.label, { gap }) + 2 * theme.dot * p.norm));
+  const label = p.text(icon.label, W / 2, 0, { pitch, fill: theme.muted, gap, anchor: "middle" });
+  return { w: W, h: TILE_H, body: p.cardBody(W, TILE_H,
+    `${logo(48, W / 2, 46)}<g transform="translate(0 ${n(112 - label.h / 2)})">${label.svg}</g>`) };
 }
 
 /** One icon card as a standalone SVG; also returns its size. */
-export function tile(p, theme, icon, style = "below") {
-  const t = tileParts(p, theme, icon, style);
+export function tile(p, theme, icon, style = "below", doubleWidth = false) {
+  const t = tileParts(p, theme, icon, style, doubleWidth);
   return { svg: svgDoc(t.w, t.h, t.body), w: t.w, h: t.h };
 }
 
 /**
  * Categories side by side (icons module with columns > 1). Each row of
  * categories is one SVG, so a category's tiles always stay in its own column.
- *   groups  [[title, [icon]]] in display order
+ * Supports:
+ *   - continuity: "unified" (Mode A: uniform column widths) vs "granular" (Mode B: per-category column span & manual overrides)
+ *   - double_mode: "off" | "auto" (fills odd rows) | "manual" (double_items) | "both"
+ *   groups  [[title, [icon], catKey]] in display order
  * Returns [{svg, alt}], one per row.
  */
 export function categoryRows(p, theme, groups, o) {
-  const GAP = 12, TILE_GAP = 6, HEAD = 40;
-  // Tiles are grid_size px high at full README width; badges half of that
-  // (they are wide and low, so the same factor would make them unreadable).
+  const GAP = 12, HEAD = 40;
   const scale = o.tile === "badge" ? (o.grid_size * 0.5) / 48 : o.grid_size / TILE_H;
-  const narrowW = (CARD_W - (o.columns - 1) * GAP) / o.columns;
-  const isWide = (g) => o.wide_toggle === "on" && g[1].length > o.wide_above;
+  const unitColW = (CARD_W - (o.columns - 1) * GAP) / o.columns;
+  const manualSpans = Object.fromEntries(splitPairs(o.col_spans || "").map(([k, v]) => [k.toLowerCase(), Math.max(1, Math.min(o.columns, Number(v) || 1))]));
+  const doubleSet = new Set(splitList(o.double_items || "").map((k) => k.toLowerCase()));
+  const useManualDouble = o.double_mode === "manual" || o.double_mode === "both" || o.continuity === "granular";
+  const useAutoDouble = o.double_mode === "auto" || o.double_mode === "both";
 
-  // Rows of up to `columns` categories; with wide_toggle, big categories get a row of their own.
+  const spanOf = (g) => {
+    const [, icons, catKey = ""] = g;
+    if (o.continuity === "granular" && manualSpans[catKey.toLowerCase()]) return manualSpans[catKey.toLowerCase()];
+    if (o.wide_toggle === "on" && icons.length > o.wide_above) return o.columns;
+    return 1;
+  };
+
+  // Pack categories into rows of up to `o.columns` total span units.
   const rows = [];
-  let current = [];
+  let current = [], currentSpan = 0;
   for (const g of groups) {
-    if (isWide(g)) {
-      if (current.length) rows.push(current);
-      rows.push([g]); current = [];
-    } else {
-      current.push(g);
-      if (current.length === o.columns) { rows.push(current); current = []; }
+    const span = spanOf(g);
+    if (currentSpan + span > o.columns && current.length) {
+      rows.push(current);
+      current = [];
+      currentSpan = 0;
+    }
+    current.push({ g, span });
+    currentSpan += span;
+    if (currentSpan === o.columns) {
+      rows.push(current);
+      current = [];
+      currentSpan = 0;
     }
   }
   if (current.length) rows.push(current);
 
   return rows.map((row) => {
-    const cellW = isWide(row[0]) ? CARD_W : narrowW;
-    const cells = row.map(([title, icons], i) => {
-      const x0 = i * (cellW + GAP);
-      // Shrink long headings to fit the column (down to pitch 1.8), cut only below that.
+    // In unified mode (Mode A), if a row has fewer spans than o.columns (e.g. a wide category), keep uniform column widths unless full-row
+    let xCursor = 0;
+    const cells = row.map(({ g: [title, icons], span }) => {
+      const cellW = span * unitColW + (span - 1) * GAP;
+      const x0 = xCursor;
+      xCursor += cellW + GAP;
+
       const pitch = Math.max(1.8, Math.min(3.0, (cellW - 28) / (p.unitWidth(title) + 2 * theme.dot * p.norm)));
       const label = p.text(p.truncate(title, pitch, cellW - 28), x0 + 14, 0, { pitch, fill: theme.fg });
       const head = `<rect x="${n(x0)}" width="${n(cellW)}" height="${HEAD}" rx="${theme.radius}" fill="${theme.bg}"/>` +
         `<g transform="translate(0 ${n((HEAD - label.h) / 2)})">${label.svg}</g>`;
-      // Flow layout: tiles left to right, wrapping inside the column.
-      let x = 0, y = HEAD + 8, lineH = 0;
-      const tiles = icons.map((icon) => {
-        const t = tileParts(p, theme, icon, o.tile), w = t.w * scale, h = t.h * scale;
-        if (x > 0 && x + w > cellW) { x = 0; y += lineH + TILE_GAP; lineH = 0; }
+
+      // Calculate how many single tiles fit per line in this column
+      const singleW = (o.tile === "none" ? TILE_H : TILE_W) * scale;
+      const colsPerLine = Math.max(1, Math.floor((cellW + TILE_GAP) / (singleW + TILE_GAP)));
+
+      // Determine which icons get double width (manual selection + optional auto-fill for odd rows)
+      let x = 0, y = HEAD + 8, lineH = 0, slotsUsedInLine = 0;
+      const tiles = icons.map((icon, idx) => {
+        const key = (icon.key || "").toLowerCase();
+        let isDouble = useManualDouble && doubleSet.has(key);
+        const isLast = idx === icons.length - 1;
+        if (!isDouble && useAutoDouble && isLast && colsPerLine >= 2 && (slotsUsedInLine % colsPerLine) === colsPerLine - 2) {
+          isDouble = true;
+        } else if (!isDouble && useAutoDouble && isLast && colsPerLine === 2 && slotsUsedInLine === 0 && icons.length % 2 === 1) {
+          isDouble = true;
+        }
+        const t = tileParts(p, theme, icon, o.tile, isDouble);
+        const w = Math.min(cellW, t.w * scale), h = t.h * scale;
+        if (x > 0 && x + w > cellW + 0.5) {
+          x = 0;
+          y += lineH + TILE_GAP;
+          lineH = 0;
+          slotsUsedInLine = 0;
+        }
         const svg = `<svg x="${n(x0 + x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" viewBox="0 0 ${t.w} ${t.h}">${t.body}</svg>`;
-        x += w + TILE_GAP; lineH = Math.max(lineH, h);
+        x += w + TILE_GAP;
+        lineH = Math.max(lineH, h);
+        slotsUsedInLine += isDouble ? 2 : 1;
         return svg;
       });
       return { svg: head + tiles.join(""), h: y + lineH };
     });
     const height = Math.ceil(Math.max(...cells.map((c) => c.h)));
-    return { svg: svgDoc(CARD_W, height, cells.map((c) => c.svg).join("")), alt: row.map(([t]) => t).join(" · ") };
+    return { svg: svgDoc(CARD_W, height, cells.map((c) => c.svg).join("")), alt: row.map(({ g: [t] }) => t).join(" · ") };
   });
 }
 
@@ -308,6 +464,7 @@ export function dividerSvg(theme) {
  */
 export function bannerSvg(p, theme, opt, image, invert = false) {
   const W = 1600, H = 420, defs = [], body = [], css = [];
+  const speed = animSpeed(theme, opt);
   if (image) {
     // Photo scaled to the banner width; `position` picks the visible band.
     const scale = W / image.width, ph = image.height * scale;
@@ -357,16 +514,17 @@ export function bannerSvg(p, theme, opt, image, invert = false) {
         p.text(ch, left + i * advance * pitch, 0, { pitch, fill: theme.fg, ...big }).svg + "</g>");
       const n1 = title.length;
       if (opt.effect === "type") {
-        const dur = n(n1 * 0.18 + 4);
-        css.push(`.c{animation:type ${dur}s step-end infinite backwards;animation-delay:calc(var(--i) * .18s)}`,
-          `@keyframes type{0%{opacity:0}${n((0.18 / dur) * 100)}%{opacity:1}80%{opacity:1}85%,100%{opacity:0}}`);
+        const step = +(0.18 / speed).toFixed(3);
+        const dur = n((n1 * 0.18 + 4) / speed);
+        css.push(`.c{animation:type ${dur}s step-end infinite backwards;animation-delay:calc(var(--i) * ${step}s)}`,
+          `@keyframes type{0%{opacity:0}${n((step / dur) * 100)}%{opacity:1}80%{opacity:1}85%,100%{opacity:0}}`);
       } else if (opt.effect === "flicker") {
         letters.forEach((l, i) => { if (l && (i * 7 + 3) % 5 === 0) letters[i] = l.replace('class="c"', 'class="c f"'); });
         if (!letters.some((l) => l.includes('class="c f"'))) letters[letters.findIndex(Boolean)] = letters.find(Boolean).replace('class="c"', 'class="c f"');
-        css.push(`.f{animation:flicker 5s step-end infinite;animation-delay:calc(var(--i) * -1.3s)}`,
+        css.push(`.f{animation:flicker ${n(5 / speed)}s step-end infinite;animation-delay:calc(var(--i) * -1.3s)}`,
           `@keyframes flicker{0%,40%,44%,47%,78%,81%,100%{opacity:1}42%{opacity:.15}45%{opacity:.4}79%{opacity:.2}}`);
       } else if (opt.effect === "pulse") {
-        css.push(`.t{animation:pulse 4s ease-in-out infinite}@keyframes pulse{50%{opacity:.68}}`);
+        css.push(`.t{animation:pulse ${n(4 / speed)}s ease-in-out infinite}@keyframes pulse{50%{opacity:.68}}`);
       }
       let cursorSvg = "";
       if (cursor) {
@@ -375,7 +533,7 @@ export function bannerSvg(p, theme, opt, image, invert = false) {
         const cy = (p.large.rows - 1) * pitch + pitch * theme.dot;
         const pts = Array.from({ length: p.large.cols }, (_, c) => [cx + c * pitch, cy]);
         cursorSvg = `<path class="k" fill="${theme.fg}" d="${dotPath(pts, pitch * theme.dot, theme.shape)}"/>`;
-        css.push(`.k{animation:blink 1.1s step-end infinite}@keyframes blink{50%{opacity:0}}`);
+        css.push(`.k{animation:blink ${n(1.1 / speed)}s step-end infinite}@keyframes blink{50%{opacity:0}}`);
       }
       body.push(`<g class="t" transform="translate(0 ${ty})">${letters.join("")}${cursorSvg}</g>`);
     }
@@ -389,7 +547,7 @@ export function bannerSvg(p, theme, opt, image, invert = false) {
     const line = p.text(text.repeat(copies), 0, 0, { pitch: tp, fill: theme.fg });
     body.push(`<rect y="${H - BAND}" width="${W}" height="${BAND}" fill="${theme.bg}" opacity=".55"/>`,
       `<g transform="translate(24 ${n(H - BAND + (BAND - line.h) / 2)})"><g class="tk">${line.svg}</g></g>`);
-    css.push(`.tk{animation:tick ${n(L / opt.ticker_speed)}s linear infinite}@keyframes tick{to{transform:translateX(-${n(L)}px)}}`);
+    css.push(`.tk{animation:tick ${n(L / (opt.ticker_speed * speed))}s linear infinite}@keyframes tick{to{transform:translateX(-${n(L)}px)}}`);
   }
   const style = css.length ? `<style>${css.join("")}@media (prefers-reduced-motion:reduce){*{animation:none!important}}</style>` : "";
   return svgDoc(W, H, `${style}<defs>${defs.join("")}</defs>${body.join("")}`);
@@ -402,11 +560,11 @@ const words = (theme, str, x, y, { size = 14, fill = theme.muted, anchor = "star
   `<text x="${n(x)}" y="${n(y)}" font-family="${esc(theme.text_font)}" font-size="${size}" fill="${fill}"` +
   `${anchor === "start" ? "" : ` text-anchor="${anchor}"`} xml:space="preserve">${esc(str)}</text>`;
 const clip = (str, max) => (str.length > max ? str.slice(0, max - 1).trimEnd() + "…" : str);
-const BLINK = `<style>.k{animation:blink 1.1s step-end infinite}@keyframes blink{50%{opacity:0}}` +
+const blinkStyle = (speed = 1) => `<style>.k{animation:blink ${n(1.1 / speed)}s step-end infinite}@keyframes blink{50%{opacity:0}}` +
   `@media (prefers-reduced-motion:reduce){*{animation:none!important}}</style>`;
 
 /** Now: LABEL | text rows, labels in dots; optional blinking cursor. */
-export function nowCard(p, theme, rows, cursor) {
+export function nowCard(p, theme, rows, cursor, opt = {}) {
   const W = CARD_W, ROW = 40, pad = 24;
   const labelW = Math.min(240, Math.max(...rows.map(([l]) => p.unitWidth(l) * 2.8)) + 2 * 2.8 * theme.dot);
   const x2 = pad + labelW + 28, maxChars = Math.floor((W - x2 - pad) / 8.6);
@@ -419,7 +577,7 @@ export function nowCard(p, theme, rows, cursor) {
   if (cursor) { // after the last line's text (monospace estimate)
     const last = clip(rows[rows.length - 1][1], maxChars);
     const cx = x2 + last.length * 9 + 10, cy = 22 + (rows.length - 1) * ROW + 9;
-    extra = BLINK + `<rect class="k" x="${n(cx)}" y="${cy - 8}" width="9" height="16" rx="2" fill="${theme.fg}"/>`;
+    extra = blinkStyle(animSpeed(theme, opt)) + `<rect class="k" x="${n(cx)}" y="${cy - 8}" width="9" height="16" rx="2" fill="${theme.fg}"/>`;
   }
   return p.card(W, 22 + rows.length * ROW + 6, extra + parts.join(""));
 }
@@ -462,11 +620,12 @@ export function feedCard(p, theme, item, thumb) {
 }
 
 /** Twitch: LIVE (pulsing dot, stream title, game) or OFFLINE. */
-export function liveCard(p, theme, live, channel) {
+export function liveCard(p, theme, live, channel, opt = {}) {
   const W = CARD_W, H = 96;
   const on = !!live?.live;
+  const speed = animSpeed(theme, opt);
   const dot = on
-    ? `<style>.d{animation:pulse 1.6s ease-in-out infinite;transform-origin:44px 48px}@keyframes pulse{50%{opacity:.35;transform:scale(.8)}}` +
+    ? `<style>.d{animation:pulse ${n(1.6 / speed)}s ease-in-out infinite;transform-origin:44px 48px}@keyframes pulse{50%{opacity:.35;transform:scale(.8)}}` +
       `@media (prefers-reduced-motion:reduce){*{animation:none!important}}</style><circle class="d" cx="44" cy="48" r="11" fill="${theme.fg}"/>`
     : `<circle cx="44" cy="48" r="11" fill="none" stroke="${theme.faint}" stroke-width="2.5"/>`;
   const state = p.text(on ? "LIVE" : "OFFLINE", 72, 24, { pitch: 4.4, fill: on ? theme.fg : theme.faint });
@@ -510,10 +669,302 @@ export function guestbookCard(p, theme, entries) {
 
 /** Visitor counter badge: label + number (used by tools/counter/server.mjs). */
 export function counterSvg(p, theme, count, label = "VISITORS") {
-  const H = 48, l = p.text(label, 18, 0, { pitch: 2.4, fill: theme.muted });
+  const H = 48, l = p.text(label || "VISITORS", 18, 0, { pitch: 2.4, fill: theme.muted });
   const num = p.text(String(count).padStart(6, "0"), 18 + l.w + 16, 0, { pitch: 3.2, fill: theme.fg });
   const W = Math.ceil(18 + l.w + 16 + num.w + 18);
   return p.card(W, H, `<g transform="translate(0 ${n((H - l.h) / 2)})">${l.svg}</g><g transform="translate(0 ${n((H - num.h) / 2)})">${num.svg}</g>`);
+}
+
+// -------------------------------------------- Module 4: Extended Metrics --
+
+/** Spoken Languages (human languages + optional proficiency level and dot bar). */
+export function spokenCard(p, theme, rows, style = "bars") {
+  if (style === "cards") {
+    const W = CARD_W, pad = 22, cols = 2, gap = 14, colW = (W - 2 * pad - gap) / cols;
+    const parts = [];
+    const numRows = Math.ceil(rows.length / cols);
+    rows.forEach(([lang, level, pctStr], i) => {
+      const col = i % cols, r = Math.floor(i / cols);
+      const x = pad + col * (colW + gap), y = 20 + r * 72;
+      const pct = Math.min(100, Math.max(0, Number(pctStr) || 0));
+      parts.push(`<rect x="${n(x)}" y="${y}" width="${n(colW)}" height="58" rx="8" fill="${theme.bg}" stroke="${theme.border}"/>`);
+      parts.push(p.text(p.truncate(lang, 3.0, colW - 28), x + 14, y + 12, { pitch: 3.0, fill: theme.fg }).svg);
+      if (level) parts.push(p.text(p.truncate(level, 2.2, colW - 28), x + 14, y + 36, { pitch: 2.2, fill: theme.muted }).svg);
+      if (pct > 0) parts.push(p.text(`${Math.round(pct)}%`, x + colW - 14, y + 14, { pitch: 2.4, fill: theme.faint, anchor: "end" }).svg);
+    });
+    return p.card(W, 20 + numRows * 72 + 8, parts.join(""));
+  }
+  const W = CARD_W, pad = 24, parts = [];
+  let y = 24;
+  for (const [lang, level, pctStr] of rows) {
+    const pct = Math.min(100, Math.max(10, Number(pctStr) || 100));
+    parts.push(p.text(p.truncate(lang, 3.0, 220), pad, y, { pitch: 3.0, fill: theme.fg }).svg);
+    const dotsCount = 34, filled = Math.max(1, Math.round((pct / 100) * dotsCount));
+    for (let k = 0; k < dotsCount; k++) {
+      parts.push(`<circle cx="${260 + k * 11}" cy="${y + 9}" r="3.2" fill="${k < filled ? theme.fg : theme.dim}"/>`);
+    }
+    if (level) {
+      parts.push(p.text(p.truncate(level, 2.4, 210), W - pad, y + 2, { pitch: 2.4, fill: theme.muted, anchor: "end" }).svg);
+    }
+    y += 36;
+  }
+  return p.card(W, y + 8, parts.join(""));
+}
+
+/** GitHub Followers showcase card. */
+export function followersCard(p, theme, count, recent = [], limit = 6) {
+  const W = CARD_W, pad = 24, parts = [];
+  const num = p.text(short(count), pad, 24, { pitch: 5.5, fill: theme.fg });
+  const lbl = p.text(count === 1 ? "GITHUB FOLLOWER" : "GITHUB FOLLOWERS", pad + num.w + 20, 38, { pitch: 3.0, fill: theme.muted });
+  parts.push(num.svg, lbl.svg);
+
+  const list = (recent || []).slice(0, limit);
+  if (!list.length || limit <= 0) {
+    return p.card(W, 92, parts.join(""));
+  }
+  let y = 84;
+  parts.push(p.text("RECENT FOLLOWERS", pad, y, { pitch: 2.2, fill: theme.faint }).svg);
+  y += 26;
+  const cols = Math.min(3, Math.max(1, list.length));
+  const gap = 12, colW = (W - 2 * pad - (cols - 1) * gap) / cols;
+  list.forEach((f, idx) => {
+    const c = idx % cols, r = Math.floor(idx / cols);
+    const x0 = pad + c * (colW + gap), y0 = y + r * 52;
+    const login = typeof f === "string" ? f : f.login || "user";
+    parts.push(`<rect x="${n(x0)}" y="${y0}" width="${n(colW)}" height="42" rx="8" fill="${theme.dim}" fill-opacity=".35" stroke="${theme.border}"/>`);
+    parts.push(`<circle cx="${n(x0 + 21)}" cy="${y0 + 21}" r="11" fill="${theme.dim}"/>`);
+    parts.push(p.text(login[0] || "U", x0 + 21, y0 + 14, { pitch: 2.0, fill: theme.fg, anchor: "middle" }).svg);
+    parts.push(p.text(p.truncate(`@${login}`, 2.4, colW - 52), x0 + 40, y0 + 13, { pitch: 2.4, fill: theme.fg }).svg);
+  });
+  const rowsCount = Math.ceil(list.length / cols);
+  return p.card(W, y + rowsCount * 52 + 16, parts.join(""));
+}
+
+// ----------------------------------------- Module 3: Steam Profile Card --
+
+const fmtHours = (mins) => {
+  const h = (mins || 0) / 60;
+  return h >= 100 ? `${Math.round(h)}H` : h >= 1 ? `${h.toFixed(1).replace(".0", "")}H` : `${Math.round(mins || 0)}M`;
+};
+
+/**
+ * Steam Playtime card: shows filtered games with dot-matrix progress bars
+ * and timeframe metrics (All-Time, Last 30 Days, Last 7 Days).
+ */
+export function steamCard(p, theme, games, opt) {
+  const W = CARD_W, pad = 24, parts = [];
+  const periodLabel = opt.period === "1w" ? "LAST 7 DAYS" : opt.period === "1m" ? "LAST 30 DAYS" : "ALL-TIME";
+  const metricLabel = opt.metric === "both" ? `${periodLabel} + TOTAL` : opt.metric === "period" ? periodLabel : "TOTAL PLAYTIME";
+
+  parts.push(p.text("STEAM", pad, 20, { pitch: 2.6, fill: theme.muted }).svg);
+  parts.push(p.text(metricLabel, W - pad, 20, { pitch: 2.4, fill: theme.faint, anchor: "end" }).svg);
+
+  let y = 56;
+  if (!games.length) {
+    parts.push(p.text("NO STEAM PLAYTIME DATA FOR THIS FILTER", pad, y + 8, { pitch: 3.0, fill: theme.faint }).svg);
+    return p.card(W, y + 48, parts.join(""));
+  }
+
+  const valOf = (g) => (opt.period === "1w" ? g.week : opt.period === "1m" ? g.month : g.total) || 0;
+  const maxVal = Math.max(1, ...games.map((g) => (opt.metric === "total" ? g.total : valOf(g) || g.total)));
+
+  games.forEach((g, idx) => {
+    const primary = opt.metric === "total" ? g.total : valOf(g);
+    let rightText;
+    if (opt.metric === "both") {
+      rightText = opt.period === "all"
+        ? `${fmtHours(g.total)}${g.week > 0 ? ` (+${fmtHours(g.week)} 7D)` : ""}`
+        : `${fmtHours(valOf(g))} / ${fmtHours(g.total)}`;
+    } else if (opt.metric === "period") {
+      rightText = fmtHours(valOf(g));
+    } else {
+      rightText = fmtHours(g.total);
+    }
+
+    const rank = p.text(String(idx + 1).padStart(2, "0"), pad, y + 2, { pitch: 2.4, fill: theme.faint });
+    const title = p.text(p.truncate(g.name, 2.8, 290), pad + 38, y, { pitch: 2.8, fill: theme.fg });
+    parts.push(rank.svg, title.svg);
+
+    const barX = 365, dotsCount = 26;
+    const ratio = Math.min(1, Math.max(0, (primary || g.total) / maxVal));
+    const filled = primary > 0 ? Math.max(1, Math.round(ratio * dotsCount)) : 0;
+    for (let k = 0; k < dotsCount; k++) {
+      parts.push(`<circle cx="${barX + k * 10.5}" cy="${y + 8}" r="3" fill="${k < filled ? theme.fg : theme.dim}"/>`);
+    }
+
+    parts.push(p.text(rightText, W - pad, y + 1, { pitch: 2.5, fill: theme.muted, anchor: "end" }).svg);
+    y += 34;
+  });
+
+  return p.card(W, y + 12, parts.join(""));
+}
+
+// ------------------------------------ Module 2: Privacy-First Portfolio --
+
+/**
+ * Filter portfolio history by timeframe (ytd, 1w, 1m, 1y, custom).
+ */
+export function filterPortfolioHistory(history, period, customDays = 90) {
+  if (!Array.isArray(history) || !history.length) return [];
+  const sorted = [...history].sort((a, b) => a.date.localeCompare(b.date));
+  const lastDate = sorted[sorted.length - 1].date;
+  const yearStart = `${lastDate.slice(0, 4)}-01-01`;
+  const shift = (days) => {
+    const d = new Date(lastDate + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() - days);
+    return d.toISOString().slice(0, 10);
+  };
+  const cutoff = period === "1w" ? shift(7)
+    : period === "1m" ? shift(30)
+    : period === "1y" ? shift(365)
+    : period === "custom" ? shift(Math.max(7, Number(customDays) || 90))
+    : yearStart; // ytd default
+  const filtered = sorted.filter((pt) => pt.date >= cutoff);
+  return filtered.length >= 2 ? filtered : sorted.slice(-Math.min(sorted.length, 7));
+}
+
+/**
+ * Render Portfolio Widget:
+ *   - Allocation chart: donut, bar, or treemap (weights in %, never currency amounts)
+ *   - Performance chart: chain-linked index (Start = 100), locked until >= 7 days of data exist
+ *   - Supports linear (% change) and logarithmic (log) Y-axis scaling
+ */
+export function portfolioCard(p, theme, allocations, history, opt) {
+  const W = CARD_W, pad = 24, parts = [];
+  const shades = [theme.fg, theme.muted, theme.faint, theme.dim];
+  const opacities = [1, 0.78, 0.58, 0.42, 0.3, 0.22];
+
+  // Top section: Allocation visualization (left + legend)
+  parts.push(p.text("ASSET ALLOCATION (WEIGHT %)", pad, 20, { pitch: 2.5, fill: theme.muted }).svg);
+  parts.push(p.text(`CHART: ${opt.chart.toUpperCase()}`, W - pad, 20, { pitch: 2.2, fill: theme.faint, anchor: "end" }).svg);
+
+  let y = 52;
+  if (opt.chart === "bar") {
+    // Stacked horizontal bar + legend
+    const barW = W - 2 * pad, barH = 26;
+    let bx = pad;
+    allocations.forEach((a, i) => {
+      const w = Math.max(2, (a.weight / 100) * barW);
+      const op = opacities[i % opacities.length];
+      parts.push(`<rect x="${n(bx)}" y="${y}" width="${n(w)}" height="${barH}" fill="${theme.fg}" fill-opacity="${op}" stroke="${theme.bg}" stroke-width="1.5"/>`);
+      bx += w;
+    });
+    y += barH + 18;
+    const cols = 3, colW = (W - 2 * pad) / cols;
+    allocations.forEach((a, i) => {
+      const c = i % cols, r = Math.floor(i / cols);
+      const lx = pad + c * colW, ly = y + r * 28;
+      const op = opacities[i % opacities.length];
+      parts.push(`<rect x="${n(lx)}" y="${ly + 2}" width="12" height="12" rx="3" fill="${theme.fg}" fill-opacity="${op}"/>`);
+      parts.push(p.text(p.truncate(`${a.label} (${a.weight.toFixed(1).replace(".0", "")}%)`, 2.4, colW - 24), lx + 20, ly, { pitch: 2.4, fill: theme.fg }).svg);
+    });
+    y += Math.ceil(allocations.length / cols) * 28 + 10;
+  } else if (opt.chart === "treemap") {
+    // Proportional 2D Treemap strip layout
+    const mapW = W - 2 * pad, mapH = 112;
+    let tx = pad;
+    allocations.forEach((a, i) => {
+      const w = Math.max(24, (a.weight / 100) * mapW);
+      const op = opacities[i % opacities.length];
+      parts.push(`<rect x="${n(tx)}" y="${y}" width="${n(Math.max(1, w - 3))}" height="${mapH}" rx="6" fill="${theme.fg}" fill-opacity="${op * 0.25}" stroke="${theme.fg}" stroke-opacity="${op}"/>`);
+      if (w >= 72) {
+        parts.push(p.text(p.truncate(a.ticker, 2.6, w - 16), tx + 10, y + 14, { pitch: 2.6, fill: theme.fg }).svg);
+        parts.push(p.text(`${a.weight.toFixed(1).replace(".0", "")}%`, tx + 10, y + 42, { pitch: 3.0, fill: theme.muted }).svg);
+        if (w >= 120) parts.push(p.text(p.truncate(a.label, 2.0, w - 16), tx + 10, y + 82, { pitch: 2.0, fill: theme.faint }).svg);
+      }
+      tx += w;
+    });
+    y += mapH + 18;
+  } else {
+    // Donut chart (default) on the left + allocation table on the right
+    const cx = pad + 72, cy = y + 68, R = 54, C = 2 * Math.PI * R;
+    let offset = 0;
+    allocations.forEach((a, i) => {
+      const len = (a.weight / 100) * C;
+      const op = opacities[i % opacities.length];
+      parts.push(`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${theme.fg}" stroke-opacity="${op}" stroke-width="18" ` +
+        `stroke-dasharray="${n(Math.max(0, len - 2))} ${n(C)}" stroke-dashoffset="${n(-offset)}" transform="rotate(-90 ${cx} ${cy})"/>`);
+      offset += len;
+    });
+    const countTxt = p.text(`${allocations.length}`, cx, cy - 14, { pitch: 3.4, fill: theme.fg, anchor: "middle" });
+    const subTxt = p.text("ASSETS", cx, cy + 12, { pitch: 1.9, fill: theme.faint, anchor: "middle" });
+    parts.push(countTxt.svg, subTxt.svg);
+
+    const listX = pad + 172, listW = W - listX - pad;
+    allocations.slice(0, 6).forEach((a, i) => {
+      const ly = y + 4 + i * 24;
+      const op = opacities[i % opacities.length];
+      parts.push(`<rect x="${listX}" y="${ly + 2}" width="10" height="10" rx="2" fill="${theme.fg}" fill-opacity="${op}"/>`);
+      parts.push(p.text(p.truncate(`${a.ticker} · ${a.label}`, 2.4, 280), listX + 18, ly, { pitch: 2.4, fill: theme.fg }).svg);
+      const dots = 18, filled = Math.max(1, Math.round((a.weight / 100) * dots));
+      for (let k = 0; k < dots; k++) {
+        parts.push(`<circle cx="${listX + 315 + k * 9}" cy="${ly + 7}" r="2.4" fill="${k < filled ? theme.fg : theme.dim}"/>`);
+      }
+      parts.push(p.text(`${a.weight.toFixed(1).replace(".0", "")}%`, W - pad, ly, { pitch: 2.4, fill: theme.muted, anchor: "end" }).svg);
+    });
+    y += Math.max(146, allocations.slice(0, 6).length * 24 + 16);
+  }
+
+  // Performance section (with mandatory 7-day lock threshold)
+  if (opt.show_performance === "on") {
+    parts.push(`<line x1="${pad}" y1="${y}" x2="${W - pad}" y2="${y}" stroke="${theme.border}" stroke-dasharray="4 4"/>`);
+    y += 18;
+
+    const totalDays = Array.isArray(history) ? history.length : 0;
+    const periodNames = { ytd: "YTD", "1w": "LAST WEEK", "1m": "LAST MONTH", "1y": "LAST YEAR", custom: `LAST ${opt.custom_days}D` };
+    const pName = periodNames[opt.period] || "YTD";
+    const scaleName = opt.scale === "log" ? "LOG SCALE" : "LINEAR (%)";
+
+    parts.push(p.text(`PERFORMANCE INDEX (${pName} · ${scaleName})`, pad, y, { pitch: 2.4, fill: theme.muted }).svg);
+
+    if (totalDays < 7) {
+      // 7-Day Lock: do not show the performance graph until at least 7 days of history exist
+      y += 28;
+      parts.push(`<rect x="${pad}" y="${y}" width="${W - 2 * pad}" height="82" rx="8" fill="${theme.dim}" fill-opacity=".22" stroke="${theme.border}"/>`);
+      const lockMsg = p.text(`7-DAY THRESHOLD LOCK: COLLECTING HISTORY (${totalDays}/7 DAYS)`, W / 2, y + 22, { pitch: 2.6, fill: theme.fg, anchor: "middle" });
+      const subMsg = p.text("PERFORMANCE GRAPH UNLOCKS AUTOMATICALLY AFTER 7 DAILY SNAPSHOTS", W / 2, y + 50, { pitch: 2.0, fill: theme.faint, anchor: "middle" });
+      parts.push(lockMsg.svg, subMsg.svg);
+      y += 96;
+    } else {
+      const series = filterPortfolioHistory(history, opt.period, opt.custom_days);
+      const baseIdx = series[0]?.index || 100;
+      const lastIdx = series[series.length - 1]?.index || 100;
+      const relPct = ((lastIdx - baseIdx) / baseIdx) * 100;
+      const sign = relPct >= 0 ? "+" : "";
+      parts.push(p.text(`${sign}${relPct.toFixed(2)}% (IDX ${lastIdx.toFixed(1)})`, W - pad, y, { pitch: 2.6, fill: theme.fg, anchor: "end" }).svg);
+      y += 28;
+
+      const gx = pad + 56, gy = y, gw = W - gx - pad, gh = 116;
+      const vals = series.map((pt) => opt.scale === "log" ? Math.log10(Math.max(1e-3, pt.index)) : ((pt.index - baseIdx) / baseIdx) * 100);
+      const minV = Math.min(...vals), maxV = Math.max(...vals);
+      const span = maxV - minV || 1;
+
+      // Grid lines + Y-axis labels
+      for (const t of [0, 0.5, 1]) {
+        const ly = gy + gh - t * gh;
+        const v = minV + t * span;
+        const label = opt.scale === "log" ? `${Math.pow(10, v).toFixed(1)}` : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+        parts.push(`<line x1="${gx}" y1="${n(ly)}" x2="${gx + gw}" y2="${n(ly)}" stroke="${theme.dim}" stroke-dasharray="3 3"/>`);
+        parts.push(p.text(label, gx - 8, ly - 6, { pitch: 1.9, fill: theme.faint, anchor: "end" }).svg);
+      }
+
+      const coords = series.map((pt, i) => {
+        const px = gx + (i / Math.max(1, series.length - 1)) * gw;
+        const py = gy + gh - ((vals[i] - minV) / span) * (gh - 12) - 6;
+        return [px, py];
+      });
+      const poly = coords.map(([px, py]) => `${n(px)},${n(py)}`).join(" ");
+      const area = `${n(gx)},${n(gy + gh)} ${poly} ${n(gx + gw)},${n(gy + gh)}`;
+      parts.push(`<polygon points="${area}" fill="${theme.fg}" fill-opacity=".12"/>`);
+      parts.push(`<polyline points="${poly}" fill="none" stroke="${theme.fg}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`);
+
+      parts.push(p.text(series[0].date, gx, gy + gh + 8, { pitch: 1.9, fill: theme.faint }).svg);
+      parts.push(p.text(series[series.length - 1].date, gx + gw, gy + gh + 8, { pitch: 1.9, fill: theme.faint, anchor: "end" }).svg);
+      y += gh + 28;
+    }
+  }
+
+  return p.card(W, y + 6, parts.join(""));
 }
 
 /** Dot-matrix text as a standalone SVG (used for the editor's own headings). */

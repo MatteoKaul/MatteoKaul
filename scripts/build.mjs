@@ -1,6 +1,7 @@
-// Build README.md and all images in assets/gen/ from settings.txt.
+// Build README.md and all images in assets/gen/ from settings.txt
+// (falls back to default.settings.txt or default.config.json for forks/templates).
 //
-//   node scripts/build.mjs                    use data/ (written by fetch.mjs and live.mjs)
+//   node scripts/build.mjs                    use data/ (written by fetch.mjs, live.mjs, market.mjs, steam.mjs)
 //   node scripts/build.mjs --sample           use fake data, e.g. to try layouts
 //   node scripts/build.mjs --write-settings   also rewrite settings.txt with all
 //                                             options and their explanations
@@ -23,16 +24,31 @@ const read = (p) => readFileSync(path(p), "utf8");
 const readJson = (p, fallback) => (existsSync(path(p)) ? JSON.parse(read(p)) : fallback);
 const args = process.argv.slice(2);
 
-// What the repo looks like before the first fetch: no data, everything zero.
-const EMPTY_DATA = { followers: 0, commits: 0, pinned: [], calendar: { total: 0, weeks: [] }, repos: [] };
+/** Load settings.txt, or fall back to neutral default.config.json / default.settings.txt for forks/templates. */
+function loadConfigText() {
+  const repo = process.env.GITHUB_REPOSITORY || "";
+  const isFork = process.env.GITHUB_EVENT_NAME && repo && !/^MatteoKaul\//i.test(repo) && process.env.USE_DEFAULT_CONFIG === "true";
+  if (!isFork && existsSync(path("settings.txt"))) return read("settings.txt");
+  if (existsSync(path("default.config.json"))) return read("default.config.json");
+  if (existsSync(path("default.settings.txt"))) return read("default.settings.txt");
+  return "";
+}
 
-const settings = parseSettings(read("settings.txt"));
+// What the repo looks like before the first fetch: no data, everything zero.
+const EMPTY_DATA = { followers: 0, recentFollowers: [], commits: 0, pinned: [], calendar: { total: 0, weeks: [] }, repos: [], contributed: [] };
+
+const settings = parseSettings(loadConfigText());
 const cfg = resolve(settings);
 const catalog = JSON.parse(read("scripts/icons.json"));
 const fonts = Object.fromEntries(neededFonts(cfg).filter((f) => existsSync(path(`fonts/${f}.json`)))
   .map((f) => [f, JSON.parse(read(`fonts/${f}.json`))]));
-const data = args.includes("--sample") ? SAMPLE_DATA
-  : { ...readJson("data/github.json", EMPTY_DATA), feeds: readJson("data/feeds.json", {}), live: readJson("data/live.json", {}) };
+const data = args.includes("--sample") ? SAMPLE_DATA : {
+  ...readJson("data/github.json", EMPTY_DATA),
+  feeds: readJson("data/feeds.json", {}),
+  live: readJson("data/live.json", {}),
+  portfolio: readJson("data/portfolio.json", { history: [] }),
+  steam: readJson("data/steam.json", { games: [], snapshots: [] }),
+};
 
 for (const m of cfg.layout) if (m.type === "banner" && isVideo(m.opt.image)) convertVideo(m.opt);
 // Conversions no banner module (shown or hidden) refers to any more.

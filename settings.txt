@@ -1,24 +1,31 @@
 # Profile settings, read by scripts/build.mjs (and the editor in editor/).
 # One "key = value" per line, "#" starts a comment, "\n" is a line break in text.
 # After a change on main, the Update profile workflow rebuilds README.md and the images.
+# SECURITY WARNING: Never put API keys or secrets (e.g. STEAM_API_KEY, MARKET_API_KEY, TWITCH_CLIENT_SECRET)
+# into this file! Always store them in GitHub: Settings -> Secrets and variables -> Actions -> New repository secret.
 
 # Modules from top to bottom. Remove an id to hide that module (its options stay below).
-# Types: banner, text, icons, projects, releases, stats, activity, socials, people, now, timeline, feed, twitch, gists, code, guestbook, counter, divider. A new module: add an id here and "<id>.type = <type>".
+# Types: banner, text, icons, projects, contributed, releases, stats, followers, spoken, portfolio, steam, activity, socials, people, now, timeline, feed, twitch, gists, code, guestbook, counter, divider. A new module: add an id here and "<id>.type = <type>".
 layout = banner, about, icons, projects, releases, stats
 
 # ---- theme ----
 # dark = dark colours below | light = the light colours | auto = both; GitHub shows the one matching the viewer's theme
 # Options: dark | light | auto
 theme.mode = dark
-# Dot font: the name of a file in fonts/ (fonts/<name>.json). led = 5x7 / 7x9 LED | micro = 3x5 small, 5x7 banner
+# Font family in fonts/ (fonts/<name>.json): led, micro, inter, roboto, jetbrains (JetBrains Mono), sans (System Sans-Serif)
 theme.font = led
-# circle = LED look, square = pixel look, rounded = in between
+# led = dot-matrix LED points for any chosen font family | standard = solid vector letterforms
+# Options: led | standard
+theme.style = led
+# circle = LED look, square = pixel look, rounded = in between (used when style = led)
 # Options: circle | square | rounded
 theme.shape = circle
 # Dot radius relative to the dot spacing (0.5 = dots touch)
 theme.dot = 0.39
 # Italic slant, 0 = upright
 theme.slant = 0.22
+# Global animation speed multiplier (1.0 = normal, 0.5 = half speed, 2.0 = double speed)
+theme.animation_speed = 1
 # Main text and logos
 theme.fg = #ffffff
 # Labels and secondary text
@@ -57,8 +64,11 @@ theme.text_font = ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
 # Big title on a background image
 # Letters A-Z and spaces; long titles shrink to fit. E.g. MATTEO KAUL, LUMI, LUMIEREZ, LUMI CODE
 banner.title = MATREXX
-# theme = the theme font, or a font name for the banner only (micro has digits)
+# theme = the theme font family, or a font name for the banner only (led, micro, inter, roboto, jetbrains, sans)
 banner.font = theme
+# theme = use theme.style | led = dot-matrix LED points | standard = solid vector letters
+# Options: theme | led | standard
+banner.style = theme
 # File in assets/src, or none. Images: png, jpg, webp. Animated: gif, animated webp.
 # Videos (mp4, webm, mov) are turned into an animated webp by the workflow (needs ffmpeg locally)
 banner.image = background.webp
@@ -77,6 +87,8 @@ banner.shadow = 60
 # none | type = letters appear one by one, then clear | flicker = a few letters flicker like an old LED sign | pulse = slow breathing
 # Options: none | type | flicker | pulse
 banner.effect = none
+# Component animation speed multiplier (multiplies with theme.animation_speed)
+banner.animation_speed = 1
 # A blinking dot cursor after the title
 banner.cursor = off
 # Scrolling LED line at the bottom of the banner, empty = off. E.g. NOW BUILDING: LUMI +++ LIVE ON TWITCH
@@ -141,6 +153,19 @@ icons.size = 100
 icons.columns = 2
 # Tile height in px at full README width. Reference: 80 = large | 64 = default | 48 = small
 icons.grid_size = 64
+# unified = Mode A: unifies all columns within a topic automatically | granular = Mode B: allows manual width overrides per category/column or icon
+# Options: unified | granular
+icons.continuity = unified
+# keep = keep as own category | more = Dissolve into "More" (merge single-icon groups into a combined 'More' group) | hide = Hide categories containing only 1 icon
+# Options: keep | more | hide
+icons.dissolve_single = keep
+# off = normal width | auto = fill odd grid rows with 2x width | manual = only icons in double_items | both = manual + auto row fill
+# Options: off | auto | manual | both
+icons.double_mode = off
+# Icons rendered at 2x width (in manual/both mode or granular continuity), e.g. docker, linux
+icons.double_items = 
+# Only in continuity = granular: category=span pairs (1..columns) to manually set category column widths, e.g. languages=2, os=2
+icons.col_spans = 
 # on = only show categories with at least "Minimum icons" icons
 icons.min_toggle = off
 icons.min_icons = 2
@@ -342,3 +367,84 @@ support.items =
 support.tile = badge
 # Display height in px of a below-style tile; the other styles scale with it
 support.size = 72
+
+# ---- contributed: Projects I Participate In (hidden, not in layout) ----
+# External repositories you contribute to (GitHub data)
+contributed.title = PROJECTS I PARTICIPATE IN
+# auto = repositories you contributed to on GitHub | list = specific owner/repo entries below
+# Options: auto | list
+contributed.mode = auto
+# Optional owner/repo names, e.g. torvalds/linux, godotengine/godot
+contributed.repos = 
+# Repo names or owner/repo to hide from automatic list
+contributed.exclude = 
+contributed.limit = 6
+# Options: hide | placeholder
+contributed.empty = hide
+
+# ---- followers: GitHub Followers (hidden, not in layout) ----
+# Follower counter and recent followers showcase (GitHub data)
+followers.title = FOLLOWERS
+# card = counter + recent follower cards | compact = full-width summary bar | badges = avatar strip
+# Options: card | compact | badges
+followers.style = card
+# 0 = show only the follower count and stats
+followers.limit = 6
+
+# ---- spoken: Spoken Languages (hidden, not in layout) ----
+# Human languages you speak with optional proficiency level
+spoken.title = SPOKEN LANGUAGES
+# One language per line (\n in settings.txt): LANGUAGE | LEVEL | optional percentage (10-100) for the dot bar.
+# E.g. GERMAN | NATIVE (C2) | 100\nENGLISH | FLUENT (C1) | 90
+spoken.items = GERMAN | NATIVE (C2) | 100\nENGLISH | FLUENT (C1) | 90
+# bars = dot-matrix progress bars in one card | cards = side-by-side cards
+# Options: bars | cards
+spoken.style = bars
+
+# ---- portfolio: Portfolio & Asset Tracker (hidden, not in layout) ----
+# Privacy-first portfolio allocation and chain-linked performance index (never stores absolute currency values; optional MARKET_API_KEY secret for Tiingo/AlphaVantage)
+# IMPORTANT: Optional: For Tiingo or Alpha Vantage market data, store your API key as a GitHub Repository Secret named MARKET_API_KEY (Yahoo/Stooq works without a key). NEVER paste an API key or absolute currency amounts into settings.txt!
+portfolio.title = PORTFOLIO
+# Ticker=Weight%|Label pairs (sum = 100%). Absolute €/$ values entered in the editor are converted client-side to percentages immediately and are NEVER saved or exported.
+# E.g. VWCE.DE=60|FTSE ALL-WORLD, AAPL=25|APPLE, BTC-USD=15|BITCOIN
+portfolio.allocations = 
+# yahoo / stooq = free without key | tiingo / alphavantage = uses repository secret MARKET_API_KEY
+# Options: yahoo | tiingo | alphavantage | stooq
+portfolio.provider = yahoo
+# donut = segmented ring chart | bar = stacked allocation bar | treemap = proportional 2D tiles
+# Options: donut | bar | treemap
+portfolio.chart = donut
+# on = show chain-linked index graph (requires at least 7 days of history; locked before 7 days)
+portfolio.show_performance = on
+# ytd = Year-to-Date (default) | 1w = Last Week (7d) | 1m = Last Month (30d) | 1y = Last Year (365d) | custom = Custom days below
+# Options: ytd | 1w | 1m | 1y | custom
+portfolio.period = ytd
+# Used when period = custom (minimum 7 days)
+portfolio.custom_days = 90
+# linear = relative change in % | log = logarithmic index scale
+# Options: linear | log
+portfolio.scale = linear
+# Options: hide | placeholder
+portfolio.empty = hide
+
+# ---- steam: Steam Profile (hidden, not in layout) ----
+# Public Steam profile playtime tracker with daily snapshots for exact 7d/30d deltas (requires STEAM_API_KEY secret)
+# IMPORTANT: Required: Store your Steam Web API Key as a GitHub Repository Secret named STEAM_API_KEY (Settings -> Secrets and variables -> Actions -> New repository secret). Make sure your Steam profile and 'Game details' are set to Public. NEVER put your API key into settings.txt!
+steam.title = STEAM PLAYTIME
+# Your 17-digit public SteamID64 (e.g. 76561198000000000), or leave empty and set STEAM_ID64 as a repo secret
+steam.steam_id = 
+# all = All-Time | 1m = Last Month (30 days via daily snapshot delta) | 1w = Last Week (7 days via daily snapshot delta)
+# Options: all | 1m | 1w
+steam.period = all
+# total = total playtime | period = playtime in selected timeframe | both = total playtime + timeframe delta
+# Options: total | period | both
+steam.metric = both
+# top5 / top10 = highest playtime in timeframe | custom5 / custom10 = manually picked games below
+# Options: top5 | top10 | custom5 | custom10
+steam.preset = top5
+# Only for custom5 / custom10: comma-separated Steam AppIDs or game names in display order
+steam.custom = 
+# Games to exclude (by AppID or name); next-ranked games automatically move up (e.g. Top 5 excl. Game X and Y)
+steam.exclude = 
+# Options: hide | placeholder
+steam.empty = hide

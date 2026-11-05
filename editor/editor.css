@@ -11,6 +11,9 @@
   --muted: #8d8d8d;
   --accent: #ffffff;
   --danger: #ff6b6b;
+  --warn-bg: #261905;
+  --warn-border: #ffb000;
+  --warn-text: #ffd479;
   --radius: 12px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
@@ -53,7 +56,7 @@ textarea { width: 100%; min-height: 120px; resize: vertical; }
 /* ---- layout: modules | options | preview ---- */
 main {
   display: grid; gap: 12px; padding: 12px;
-  grid-template-columns: 250px minmax(320px, 430px) 1fr;
+  grid-template-columns: 250px minmax(320px, 440px) 1fr;
   height: calc(100vh - 58px);
 }
 @media (max-width: 1100px) { main { grid-template-columns: 1fr; height: auto; } .panel, .preview { max-height: none; } }
@@ -94,19 +97,56 @@ main {
 .field > label.switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 400; margin: 0; }
 .switch input { accent-color: #fff; width: 16px; height: 16px; }
 
-/* ---- icon editor ---- */
+/* ---- prominent Repo Secrets warning box & modal ---- */
+.secret-warning {
+  background: var(--warn-bg);
+  border: 2px solid var(--warn-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 10px 0 16px;
+  color: var(--warn-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.secret-warning strong { color: #fff; display: block; margin-bottom: 4px; font-size: 13px; }
+.secret-warning code {
+  background: rgba(0, 0, 0, .45);
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 176, 0, .4);
+}
+.secret-warning details { margin-top: 8px; }
+.secret-warning summary { cursor: pointer; font-weight: 600; color: #fff; }
+.secret-warning ol { margin: 6px 0 0; padding-left: 20px; }
+
+.modal {
+  background: var(--card); color: var(--text); border: 1px solid var(--line-hi);
+  border-radius: var(--radius); padding: 0; max-width: 560px; width: 92%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .85);
+}
+.modal::backdrop { background: rgba(0, 0, 0, .75); backdrop-filter: blur(3px); }
+.modal-box { padding: 18px 20px; }
+.modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 14px; }
+.steps { padding-left: 20px; margin: 10px 0 4px; line-height: 1.65; }
+.steps code { background: var(--field); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--line); }
+
+/* ---- icon editor & double-width badges ---- */
 .cat { border: 1px solid var(--line); border-radius: 10px; padding: 8px; margin-bottom: 8px; background: var(--field); }
 .cat-head { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
 .cat-head input { flex: 1; font-size: 12px; letter-spacing: .08em; padding: 4px 8px; }
 .cat-head small { color: var(--muted); }
+.cat-head .span-select { width: auto; padding: 2px 6px; font-size: 11px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; align-items: center; }
 .chip {
   display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 10px; cursor: grab;
   border: 1px solid var(--line-hi); border-radius: 999px; background: #000; font-size: 12px;
 }
 .chip.moved { border-style: dotted; }
-.chip button { border: 0; padding: 0 6px; background: none; color: var(--muted); }
+.chip.double { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.chip button { border: 0; padding: 0 5px; background: none; color: var(--muted); font-size: 11px; }
 .chip button:hover { color: var(--text); }
+.chip button.on { color: #000; background: var(--accent); border-radius: 999px; font-weight: 700; }
 .picker-tools { display: flex; gap: 6px; margin-bottom: 8px; }
 .picker-tools input { flex: 1; }
 .picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 6px; max-height: 380px; overflow: auto; padding: 2px; }
@@ -114,10 +154,36 @@ main {
 .pick:hover { opacity: 1; border-color: var(--line-hi); }
 .pick.on { opacity: 1; border-color: var(--accent); }
 .pick img { width: 100%; display: block; border-radius: 8px; }
-.entry-row { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)) auto; gap: 6px; margin-bottom: 6px; }
+.entry-row { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)) auto; gap: 6px; margin-bottom: 6px; align-items: center; }
 .entry-row input, .entry-row select { min-width: 0; }
 .entry-row.wide { grid-template-columns: 1fr 1fr; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
 .entry-row.wide button { grid-column: 2; justify-self: end; }
+
+/* ---- zero-knowledge portfolio calculator ---- */
+.zk-box {
+  border: 1px solid var(--line-hi);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, .02);
+  margin-bottom: 10px;
+}
+.zk-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #142818;
+  border: 1px solid #2fcf58;
+  color: #79ff9c;
+  margin-bottom: 8px;
+}
+.zk-weight {
+  font-weight: 700;
+  color: var(--accent);
+  text-align: right;
+  padding: 0 6px;
+  min-width: 58px;
+}
 
 /* ---- preview (the README itself is styled inside the iframe, see editor.js) ---- */
 .preview { padding: 12px; display: flex; flex-direction: column; }
@@ -126,7 +192,7 @@ main {
 .status.error { color: var(--danger); font-weight: 600; }
 
 /* ---- theme presets: a swatch (fg on bg) and the name ---- */
-.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .presets button i { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(var(--a) 35%, var(--b) 40%); border: 1px solid var(--line-hi); }
 .field datalist { display: none; }
 .field input[list] { width: 100%; }

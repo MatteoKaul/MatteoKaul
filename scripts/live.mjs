@@ -17,7 +17,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FILE = join(ROOT, "data/live.json");
 const { TWITCH_CLIENT_ID: id, TWITCH_CLIENT_SECRET: secret } = process.env;
 
-const cfg = resolve(parseSettings(readFileSync(join(ROOT, "settings.txt"), "utf8")));
+const settingsFile = existsSync(join(ROOT, "settings.txt")) ? "settings.txt"
+  : existsSync(join(ROOT, "default.config.json")) ? "default.config.json" : "default.settings.txt";
+const cfg = resolve(parseSettings(readFileSync(join(ROOT, settingsFile), "utf8")));
 const channels = [...new Set(cfg.modules.filter((m) => m.type === "twitch").map((m) => m.opt.channel.toLowerCase()))];
 if (!channels.length) { console.log("live: no twitch module"); process.exit(0); }
 if (!id || !secret) { console.log("live: TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET not set, skipped"); process.exit(0); }

@@ -24,12 +24,34 @@
       <option value="light">GitHub light</option>
     </select>
   </label>
+  <button id="secretsGuideBtn" title="How to configure GitHub Repository Secrets safely">🔒 Repo Secrets Guide</button>
   <span class="spacer"></span>
-  <label class="button">Import settings.txt<input type="file" id="importFile" accept=".txt" hidden></label>
+  <label class="button">Import settings.txt<input type="file" id="importFile" accept=".txt,.json" hidden></label>
   <button id="copy">Copy settings.txt</button>
   <button id="download" class="primary">Download settings.txt</button>
   <a id="editOnGithub" class="button" target="_blank" rel="noopener">Edit on GitHub</a>
 </header>
+
+<dialog id="secretsDialog" class="modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <strong>🔒 How to Add a GitHub Repository Secret</strong>
+      <button id="closeSecretsBtn" class="icon-btn" title="Close">×</button>
+    </div>
+    <div class="secret-warning">
+      <strong>⚠️ SECURITY WARNING:</strong> Never store API keys, tokens, or secrets in <code>settings.txt</code>!
+      Everything in <code>settings.txt</code> is committed to your public GitHub repository.
+    </div>
+    <ol class="steps">
+      <li>Open your profile repository on <strong>github.com</strong>.</li>
+      <li>Click on <strong>Settings</strong> (top navigation tab of the repository).</li>
+      <li>In the left sidebar under <em>Security</em>, click <strong>Secrets and variables</strong> &rarr; <strong>Actions</strong>.</li>
+      <li>Click the green <strong>New repository secret</strong> button.</li>
+      <li>Enter the exact <strong>Name</strong> (e.g. <code>STEAM_API_KEY</code>, <code>MARKET_API_KEY</code>, <code>TWITCH_CLIENT_ID</code>, or <code>TWITCH_CLIENT_SECRET</code>) and paste your secret key into <strong>Secret</strong>.</li>
+      <li>Click <strong>Add secret</strong>. The daily GitHub Action workflow will automatically read it via <code>${{ secrets.NAME }}</code>.</li>
+    </ol>
+  </div>
+</dialog>
 
 <main>
   <nav class="panel" id="modules" aria-label="Modules"></nav>

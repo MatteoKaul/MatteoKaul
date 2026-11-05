@@ -23,21 +23,25 @@ editor/ ── loads the same files + render.mjs in the browser, live preview,
 | Path | What it is |
 | --- | --- |
 | `settings.txt` | Everything you can change: layout, theme, module options. Commented. |
+| `default.config.json`, `default.settings.txt` | Neutral fallback configuration when the repo is forked or used as a template. |
 | `README.md` | Generated profile page. |
 | `scripts/render.mjs` | Renderer entry: picks the data for each module and assembles README.md. Pure functions, runs in Node and the browser. |
 | `scripts/lib/settings.mjs` | Option schema (`THEME_FIELDS`, `TYPES`), settings.txt parser/writer, validation. |
-| `scripts/lib/draw.mjs` | Dot-matrix text and every SVG piece (banner, tiles, cards, stats, ...). |
+| `scripts/lib/draw.mjs` | Dot-matrix text and every SVG piece (banner, tiles, cards, stats, portfolio, steam, ...). |
 | `scripts/build.mjs` | Node entry: reads the files, calls `render`, writes `README.md` and `assets/gen/`. |
 | `scripts/fetch.mjs` | Node entry: public GitHub data → `data/github.json`, avatars → `data/avatars/`, feeds → `data/feeds.json` + `data/thumbs/`. |
 | `scripts/live.mjs` | Node entry: Twitch live status → `data/live.json` (only with Twitch secrets). |
-| `scripts/lib/sources.mjs` | Parsers for the fetched data (RSS/Atom, gists, guestbook comments, Twitch); pure functions. |
+| `scripts/market.mjs` | Node entry: EOD market prices → chain-linked index in `data/portfolio.json`. |
+| `scripts/steam.mjs` | Node entry: Steam playtime + daily snapshots → `data/steam.json` (with `STEAM_API_KEY`). |
+| `scripts/lib/sources.mjs` | Parsers and pure state engines (RSS/Atom, gists, guestbook, Twitch, Portfolio TWR chain-linking, Steam snapshot deltas). |
 | `scripts/icons.json` | Icon catalog: `categories` (key → heading) and `icons` (key → label, category, SVG markup of the logo in a 24×24 box, optional `scale`). |
-| `fonts/led.json`, `fonts/micro.json` | Dot fonts: `small` and `large` glyph grids (`"1"` = dot). led = 5×7 / 7×9, micro = 3×5 / 5×7. |
+| `fonts/*.json` | Font families (`led`, `micro`, `inter`, `roboto`, `jetbrains`, `sans`): each contains `small` and `large` LED dot-matrix glyph grids (`"1"` = dot) plus `vector` contour paths for solid `standard` style rendering. |
 | `assets/src/` | Your source files: banner backgrounds (images, GIFs, videos), logos for people cards. |
 | `assets/gen/` | Generated SVGs. Deleted and rebuilt on every build. |
-| `data/` | Fetched data (created by the workflow): `github.json`, `feeds.json`, `live.json`, `avatars/`, `thumbs/` (images without extension, the type is read from the bytes), `media/` (converted video banners). |
-| `editor/` | Graphical editor (static HTML/CSS/JS, no build step). |
-| `.github/workflows/profile.yml` | Daily / on-change job: fetch, build, commit. |
+| `data/` | Fetched data (created by the workflow): `github.json`, `feeds.json`, `live.json`, `portfolio.json`, `steam.json`, `avatars/`, `thumbs/`, `media/`. |
+| `editor/` | Graphical editor (static HTML/CSS/JS, no build step, plus `editor/desktop/app.mjs` for multi-OS binary releases). |
+| `.github/workflows/profile.yml` | Daily / on-change job: fetch, market, steam, build, commit. |
+| `.github/workflows/editor-release.yml` | Automated Semantic Versioning & Multi-OS binary release pipeline for `editor/` (disabled on forks). |
 | `.github/workflows/live.yml` | Optional 10-minute Twitch check (off until you enable its schedule). |
 | `tools/counter/server.mjs` | Self-hosted visitor counter (see below). |
 | `HANDOFF.md` | Current status and open points. |

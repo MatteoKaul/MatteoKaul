@@ -1,6 +1,6 @@
 // Fetch everything the profile shows from outside the repo:
-//   GitHub (GraphQL)   followers, commits, pinned repos and gists, repos,
-//                      releases, guestbook comments         -> data/github.json
+//   GitHub (GraphQL)   followers, recent followers, commits, pinned repos and gists,
+//                      repos, contributed repos, releases, guestbook -> data/github.json
 //   avatars            for "gh:<login>" people images      -> data/avatars/<login>
 //   RSS / Atom feeds   for feed modules (+ thumbnails)      -> data/feeds.json, data/thumbs/
 //
@@ -25,7 +25,9 @@ const { GITHUB_TOKEN, GH_USER } = process.env;
 if (!GITHUB_TOKEN || !GH_USER) throw new Error("set GITHUB_TOKEN and GH_USER");
 // The profile repo (owner/name); the workflow sets GITHUB_REPOSITORY.
 const REPO = process.env.GITHUB_REPOSITORY || `${GH_USER}/${GH_USER}`;
-const cfg = resolve(parseSettings(readFileSync(path("settings.txt"), "utf8")));
+const settingsFile = existsSync(path("settings.txt")) ? "settings.txt"
+  : existsSync(path("default.config.json")) ? "default.config.json" : "default.settings.txt";
+const cfg = resolve(parseSettings(readFileSync(path(settingsFile), "utf8")));
 const modules = (type) => cfg.modules.filter((m) => m.type === type); // shown and hidden ones
 const readJson = (p, fallback) => (existsSync(path(p)) ? JSON.parse(readFileSync(path(p), "utf8")) : fallback);
 const UA = { "User-Agent": "profile-readme (github.com/" + REPO + ")" };
@@ -36,12 +38,18 @@ const GIST = "name description url stargazerCount files(limit: 1) { name languag
 const QUERY = `
 query($login: String!) {
   user(login: $login) {
-    followers { totalCount }
+    followers(first: 12) { totalCount nodes { login } }
     pinnedItems(first: 6, types: [REPOSITORY, GIST]) { nodes { __typename ... on Repository { name } ... on Gist { ${GIST} } } }
     gists(first: 12, privacy: PUBLIC, orderBy: {field: UPDATED_AT, direction: DESC}) { nodes { ${GIST} } }
     contributionsCollection {
       totalCommitContributions
       contributionCalendar { totalContributions weeks { contributionDays { contributionLevel } } }
+    }
+    repositoriesContributedTo(first: 12, privacy: PUBLIC, includeUserRepositories: false, orderBy: {field: STARGAZERS, direction: DESC}, contributionTypes: [COMMIT, PULL_REQUEST, REPOSITORY]) {
+      nodes {
+        nameWithOwner description url isFork stargazerCount pushedAt
+        primaryLanguage { name }
+      }
     }
     repositories(first: 100, ownerAffiliations: OWNER, privacy: PUBLIC, orderBy: {field: PUSHED_AT, direction: DESC}) {
       nodes {
@@ -75,6 +83,7 @@ const data = {
   repo: REPO,
   fetchedAt: new Date().toISOString(),
   followers: u.followers.totalCount,
+  recentFollowers: (u.followers.nodes || []).map((f) => ({ login: f.login })),
   commits: u.contributionsCollection.totalCommitContributions,
   pinned: u.pinnedItems.nodes.filter((n) => n.__typename === "Repository").map((r) => r.name),
   gists: {
@@ -93,7 +102,42 @@ const data = {
     languages: Object.fromEntries(r.languages.edges.map((e) => [e.node.name, e.size])),
     release: r.latestRelease && { tag: r.latestRelease.tagName, url: r.latestRelease.url, date: r.latestRelease.publishedAt.slice(0, 10) },
   })),
+  contributed: (u.repositoriesContributedTo?.nodes || []).map((r) => ({
+    name: r.nameWithOwner,
+    description: r.description,
+    url: r.url,
+    fork: r.isFork,
+    stars: r.stargazerCount,
+    pushedAt: r.pushedAt,
+    language: r.primaryLanguage?.name || "",
+  })),
 };
+
+// Also fetch any extra external owner/repo listed in contributed.repos
+const extraContributed = [...new Set(modules("contributed")
+  .flatMap((m) => splitList(m.opt.repos))
+  .filter((x) => /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(x) &&
+    !data.contributed.some((c) => c.name.toLowerCase() === x.toLowerCase())))];
+
+for (const full of extraContributed) {
+  const [owner, name] = full.split("/");
+  try {
+    const r = (await graphql(`query($owner: String!, $name: String!) {
+      repository(owner: $owner, name: $name) {
+        nameWithOwner description url isFork stargazerCount pushedAt primaryLanguage { name }
+      }
+    }`, { owner, name })).repository;
+    if (r) {
+      data.contributed.push({
+        name: r.nameWithOwner, description: r.description, url: r.url,
+        fork: r.isFork, stars: r.stargazerCount, pushedAt: r.pushedAt,
+        language: r.primaryLanguage?.name || "",
+      });
+    }
+  } catch (err) {
+    console.warn(`contributed ${full}: ${err.message}`);
+  }
+}
 
 // Guestbook: comments of the configured issue in the profile repo.
 const issue = modules("guestbook").map((m) => m.opt.issue).find((n) => n > 0);
@@ -182,5 +226,5 @@ for (const item of Object.values(feeds).flat()) {
 prune("data/thumbs", Object.values(feeds).flat().map((i) => i.thumb.split("/")[2]).filter(Boolean));
 writeFileSync(path("data/feeds.json"), JSON.stringify(feeds, null, 1) + "\n");
 
-console.log(`fetched ${data.repos.length} repos, ${data.calendar.total} contributions, ${data.gists.recent.length} gists, ` +
-  `${logins.length} avatars, ${sources.length} feeds${issue ? `, ${data.guestbook?.entries?.length ?? 0} guestbook entries` : ""}`);
+console.log(`fetched ${data.repos.length} repos, ${data.contributed.length} contributed, ${data.calendar.total} contributions, ` +
+  `${data.gists.recent.length} gists, ${logins.length} avatars, ${sources.length} feeds${issue ? `, ${data.guestbook?.entries?.length ?? 0} guestbook entries` : ""}`);

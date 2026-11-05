@@ -10,19 +10,23 @@
 // ---------------------------------------------------------------- schema --
 
 // Theme options, written as "theme.<key>" in settings.txt.
-export const FONTS = ["led", "micro"]; // files in fonts/, offered by the editor
+export const FONTS = ["led", "micro", "inter", "roboto", "jetbrains", "sans"]; // files in fonts/, offered by the editor
 
 export const THEME_FIELDS = [
   { key: "mode", label: "Mode", type: "select", options: ["dark", "light", "auto"], default: "dark",
     help: "dark = dark colours below | light = the light colours | auto = both; GitHub shows the one matching the viewer's theme" },
-  { key: "font", label: "Font", type: "name", suggest: FONTS, default: "led",
-    help: "Dot font: the name of a file in fonts/ (fonts/<name>.json). led = 5x7 / 7x9 LED | micro = 3x5 small, 5x7 banner" },
-  { key: "shape", label: "Dot shape", type: "select", options: ["circle", "square", "rounded"], default: "circle",
-    help: "circle = LED look, square = pixel look, rounded = in between" },
+  { key: "font", label: "Font family", type: "name", suggest: FONTS, default: "led",
+    help: "Font family in fonts/ (fonts/<name>.json): led, micro, inter, roboto, jetbrains (JetBrains Mono), sans (System Sans-Serif)" },
+  { key: "style", label: "Renderer style", type: "select", options: ["led", "standard"], default: "led",
+    help: "led = dot-matrix LED points for any chosen font family | standard = solid vector letterforms" },
+  { key: "shape", label: "Dot shape (LED style)", type: "select", options: ["circle", "square", "rounded"], default: "circle",
+    help: "circle = LED look, square = pixel look, rounded = in between (used when style = led)" },
   { key: "dot", label: "Dot size", type: "number", min: 0.2, max: 0.5, step: 0.01, default: 0.39,
     help: "Dot radius relative to the dot spacing (0.5 = dots touch)" },
   { key: "slant", label: "Slant", type: "number", min: 0, max: 0.4, step: 0.01, default: 0.22,
     help: "Italic slant, 0 = upright" },
+  { key: "animation_speed", label: "Animation speed", type: "number", min: 0.2, max: 4.0, step: 0.1, default: 1.0,
+    help: "Global animation speed multiplier (1.0 = normal, 0.5 = half speed, 2.0 = double speed)" },
   { key: "fg", label: "Foreground", type: "color", default: "#ffffff", help: "Main text and logos" },
   { key: "muted", label: "Muted", type: "color", default: "#cfcfcf", help: "Labels and secondary text" },
   { key: "faint", label: "Faint", type: "color", default: "#7a7a7a", help: "Placeholders and hints" },
@@ -55,8 +59,10 @@ export const TYPES = {
     fields: [
       { key: "title", label: "Title", type: "text", default: "MATREXX",
         help: "Letters A-Z and spaces; long titles shrink to fit. E.g. MATTEO KAUL, LUMI, LUMIEREZ, LUMI CODE" },
-      { key: "font", label: "Font", type: "name", suggest: ["theme", ...FONTS], default: "theme",
-        help: "theme = the theme font, or a font name for the banner only (micro has digits)" },
+      { key: "font", label: "Font family", type: "name", suggest: ["theme", ...FONTS], default: "theme",
+        help: "theme = the theme font family, or a font name for the banner only (led, micro, inter, roboto, jetbrains, sans)" },
+      { key: "style", label: "Renderer style", type: "select", options: ["theme", "led", "standard"], default: "theme",
+        help: "theme = use theme.style | led = dot-matrix LED points | standard = solid vector letters" },
       { key: "image", label: "Background", type: "file", default: "background.webp",
         help: "File in assets/src, or none. Images: png, jpg, webp. Animated: gif, animated webp.\n" +
           "Videos (mp4, webm, mov) are turned into an animated webp by the workflow (needs ffmpeg locally)" },
@@ -73,6 +79,8 @@ export const TYPES = {
         help: "Reference: 40 = barely visible | 60 = subtle (default) | 67 = stronger" },
       { key: "effect", label: "Title animation", type: "select", options: ["none", "type", "flicker", "pulse"], default: "none",
         help: "none | type = letters appear one by one, then clear | flicker = a few letters flicker like an old LED sign | pulse = slow breathing" },
+      { key: "animation_speed", label: "Animation speed", type: "number", min: 0.2, max: 4.0, step: 0.1, default: 1.0,
+        help: "Component animation speed multiplier (multiplies with theme.animation_speed)" },
       { key: "cursor", label: "Blinking cursor", type: "toggle", default: "off", help: "A blinking dot cursor after the title" },
       { key: "ticker", label: "Ticker text", type: "text", default: "",
         help: "Scrolling LED line at the bottom of the banner, empty = off. E.g. NOW BUILDING: LUMI +++ LIVE ON TWITCH" },
@@ -108,6 +116,16 @@ export const TYPES = {
         help: "1 = one category per row with large headings | 2-4 = small headings and tiles, categories in columns" },
       { key: "grid_size", label: "Tile size (columns > 1)", type: "number", min: 40, max: 100, step: 2, default: 64,
         help: "Tile height in px at full README width. Reference: 80 = large | 64 = default | 48 = small" },
+      { key: "continuity", label: "Layout continuity", type: "select", options: ["unified", "granular"], default: "unified",
+        help: "unified = Mode A: unifies all columns within a topic automatically | granular = Mode B: allows manual width overrides per category/column or icon" },
+      { key: "dissolve_single", label: "Single-icon groups", type: "select", options: ["keep", "more", "hide"], default: "keep",
+        help: "keep = keep as own category | more = Dissolve into \"More\" (merge single-icon groups into a combined 'More' group) | hide = Hide categories containing only 1 icon" },
+      { key: "double_mode", label: "Double-width (2x) mode", type: "select", options: ["off", "auto", "manual", "both"], default: "off",
+        help: "off = normal width | auto = fill odd grid rows with 2x width | manual = only icons in double_items | both = manual + auto row fill" },
+      { key: "double_items", label: "Double-width icons", type: "list", default: "",
+        help: "Icons rendered at 2x width (in manual/both mode or granular continuity), e.g. docker, linux" },
+      { key: "col_spans", label: "Category column spans (granular)", type: "pairs", default: "",
+        help: "Only in continuity = granular: category=span pairs (1..columns) to manually set category column widths, e.g. languages=2, os=2" },
       { key: "min_toggle", label: "Hide small categories", type: "toggle", default: "off",
         help: "on = only show categories with at least \"Minimum icons\" icons" },
       { key: "min_icons", label: "Minimum icons", type: "number", min: 1, max: 4, step: 1, default: 2 },
@@ -134,6 +152,20 @@ export const TYPES = {
         help: "hide = section disappears until there is something to show | placeholder = show a NO ... YET card" },
     ],
   },
+  contributed: {
+    label: "Projects I Participate In", help: "External repositories you contribute to (GitHub data)",
+    fields: [
+      { key: "title", label: "Heading", type: "text", default: "PROJECTS I PARTICIPATE IN" },
+      { key: "mode", label: "Selection mode", type: "select", options: ["auto", "list"], default: "auto",
+        help: "auto = repositories you contributed to on GitHub | list = specific owner/repo entries below" },
+      { key: "repos", label: "Repositories (list or extra)", type: "list", default: "",
+        help: "Optional owner/repo names, e.g. torvalds/linux, godotengine/godot" },
+      { key: "exclude", label: "Exclude repos", type: "list", default: "",
+        help: "Repo names or owner/repo to hide from automatic list" },
+      { key: "limit", label: "Max cards", type: "number", min: 1, max: 12, step: 1, default: 6 },
+      { key: "empty", label: "When empty", type: "select", options: ["hide", "placeholder"], default: "hide" },
+    ],
+  },
   releases: {
     label: "Releases", help: "Cards linking to your latest releases (GitHub data)",
     fields: [
@@ -152,6 +184,79 @@ export const TYPES = {
       { key: "title", label: "Heading", type: "text", default: "STATS" },
       { key: "languages", label: "Top languages", type: "number", min: 0, max: 8, step: 1, default: 5,
         help: "How many language bars, 0 = none" },
+    ],
+  },
+  followers: {
+    label: "GitHub Followers", help: "Follower counter and recent followers showcase (GitHub data)",
+    fields: [
+      { key: "title", label: "Heading", type: "text", default: "FOLLOWERS" },
+      { key: "style", label: "Display style", type: "select", options: ["card", "compact", "badges"], default: "card",
+        help: "card = counter + recent follower cards | compact = full-width summary bar | badges = avatar strip" },
+      { key: "limit", label: "Recent followers shown", type: "number", min: 0, max: 12, step: 1, default: 6,
+        help: "0 = show only the follower count and stats" },
+    ],
+  },
+  spoken: {
+    label: "Spoken Languages", help: "Human languages you speak with optional proficiency level",
+    fields: [
+      { key: "title", label: "Heading", type: "text", default: "SPOKEN LANGUAGES" },
+      { key: "items", label: "Languages", type: "rows", columns: ["Language", "Level (e.g. Native, C1)", "Proficiency % (10-100)"],
+        default: "GERMAN | NATIVE (C2) | 100\nENGLISH | FLUENT (C1) | 90",
+        help: "One language per line (\\n in settings.txt): LANGUAGE | LEVEL | optional percentage (10-100) for the dot bar.\n" +
+          "E.g. GERMAN | NATIVE (C2) | 100\\nENGLISH | FLUENT (C1) | 90" },
+      { key: "style", label: "Display style", type: "select", options: ["bars", "cards"], default: "bars",
+        help: "bars = dot-matrix progress bars in one card | cards = side-by-side cards" },
+    ],
+  },
+  portfolio: {
+    label: "Portfolio & Asset Tracker",
+    help: "Privacy-first portfolio allocation and chain-linked performance index (never stores absolute currency values; optional MARKET_API_KEY secret for Tiingo/AlphaVantage)",
+    secretWarning: {
+      secrets: ["MARKET_API_KEY"],
+      text: "Optional: For Tiingo or Alpha Vantage market data, store your API key as a GitHub Repository Secret named MARKET_API_KEY (Yahoo/Stooq works without a key). NEVER paste an API key or absolute currency amounts into settings.txt!",
+    },
+    fields: [
+      { key: "title", label: "Heading", type: "text", default: "PORTFOLIO" },
+      { key: "allocations", label: "Asset weights (% only, Zero-Knowledge)", type: "portfolio", default: "",
+        help: "Ticker=Weight%|Label pairs (sum = 100%). Absolute €/$ values entered in the editor are converted client-side to percentages immediately and are NEVER saved or exported.\n" +
+          "E.g. VWCE.DE=60|FTSE ALL-WORLD, AAPL=25|APPLE, BTC-USD=15|BITCOIN" },
+      { key: "provider", label: "Market data provider", type: "select", options: ["yahoo", "tiingo", "alphavantage", "stooq"], default: "yahoo",
+        help: "yahoo / stooq = free without key | tiingo / alphavantage = uses repository secret MARKET_API_KEY" },
+      { key: "chart", label: "Allocation chart type", type: "select", options: ["donut", "bar", "treemap"], default: "donut",
+        help: "donut = segmented ring chart | bar = stacked allocation bar | treemap = proportional 2D tiles" },
+      { key: "show_performance", label: "Show performance graph", type: "toggle", default: "on",
+        help: "on = show chain-linked index graph (requires at least 7 days of history; locked before 7 days)" },
+      { key: "period", label: "Performance timeframe", type: "select", options: ["ytd", "1w", "1m", "1y", "custom"], default: "ytd",
+        help: "ytd = Year-to-Date (default) | 1w = Last Week (7d) | 1m = Last Month (30d) | 1y = Last Year (365d) | custom = Custom days below" },
+      { key: "custom_days", label: "Custom timeframe (days)", type: "number", min: 7, max: 3650, step: 1, default: 90,
+        help: "Used when period = custom (minimum 7 days)" },
+      { key: "scale", label: "Y-axis scaling", type: "select", options: ["linear", "log"], default: "linear",
+        help: "linear = relative change in % | log = logarithmic index scale" },
+      { key: "empty", label: "When empty", type: "select", options: ["hide", "placeholder"], default: "hide" },
+    ],
+  },
+  steam: {
+    label: "Steam Profile",
+    help: "Public Steam profile playtime tracker with daily snapshots for exact 7d/30d deltas (requires STEAM_API_KEY secret)",
+    secretWarning: {
+      secrets: ["STEAM_API_KEY"],
+      text: "Required: Store your Steam Web API Key as a GitHub Repository Secret named STEAM_API_KEY (Settings -> Secrets and variables -> Actions -> New repository secret). Make sure your Steam profile and 'Game details' are set to Public. NEVER put your API key into settings.txt!",
+    },
+    fields: [
+      { key: "title", label: "Heading", type: "text", default: "STEAM PLAYTIME" },
+      { key: "steam_id", label: "SteamID64", type: "text", default: "",
+        help: "Your 17-digit public SteamID64 (e.g. 76561198000000000), or leave empty and set STEAM_ID64 as a repo secret" },
+      { key: "period", label: "Timeframe", type: "select", options: ["all", "1m", "1w"], default: "all",
+        help: "all = All-Time | 1m = Last Month (30 days via daily snapshot delta) | 1w = Last Week (7 days via daily snapshot delta)" },
+      { key: "metric", label: "Displayed metric", type: "select", options: ["total", "period", "both"], default: "both",
+        help: "total = total playtime | period = playtime in selected timeframe | both = total playtime + timeframe delta" },
+      { key: "preset", label: "Filter preset", type: "select", options: ["top5", "top10", "custom5", "custom10"], default: "top5",
+        help: "top5 / top10 = highest playtime in timeframe | custom5 / custom10 = manually picked games below" },
+      { key: "custom", label: "Custom games (AppIDs or names)", type: "list", default: "",
+        help: "Only for custom5 / custom10: comma-separated Steam AppIDs or game names in display order" },
+      { key: "exclude", label: "Exclude games (AppIDs or names)", type: "list", default: "",
+        help: "Games to exclude (by AppID or name); next-ranked games automatically move up (e.g. Top 5 excl. Game X and Y)" },
+      { key: "empty", label: "When empty", type: "select", options: ["hide", "placeholder"], default: "hide" },
     ],
   },
   activity: {
@@ -193,6 +298,8 @@ export const TYPES = {
         help: "One line per entry (\\n between them in settings.txt), each: LABEL | text.\n" +
           "E.g. BUILDING | a homelab dashboard\\nLEARNING | Rust\\nPLAYING | Factorio" },
       { key: "cursor", label: "Blinking cursor", type: "toggle", default: "on", help: "A blinking dot after the last line" },
+      { key: "animation_speed", label: "Animation speed", type: "number", min: 0.2, max: 4.0, step: 0.1, default: 1.0,
+        help: "Cursor blink speed multiplier" },
     ],
   },
   timeline: {
@@ -218,11 +325,17 @@ export const TYPES = {
   },
   twitch: {
     label: "Twitch live", help: "Shows when you are live on Twitch (needs TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET secrets)",
+    secretWarning: {
+      secrets: ["TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET"],
+      text: "Required: Store your Twitch Client ID and Client Secret as GitHub Repository Secrets (TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET). NEVER store API keys or secrets in settings.txt!",
+    },
     fields: [
       { key: "title", label: "Heading", type: "text", default: "" },
       { key: "channel", label: "Channel", type: "name", default: "matrexx_live" },
       { key: "offline", label: "When offline", type: "select", options: ["hide", "show"], default: "hide",
         help: "hide = only visible while live | show = an OFFLINE card linking to the channel" },
+      { key: "animation_speed", label: "Animation speed", type: "number", min: 0.2, max: 4.0, step: 0.1, default: 1.0,
+        help: "Live indicator pulse speed multiplier" },
     ],
   },
   gists: {
@@ -256,11 +369,15 @@ export const TYPES = {
     ],
   },
   counter: {
-    label: "Visitor counter", help: "Image from your own counter server (tools/counter/), drawn in the same style",
+    label: "Profile Views (Counter)", help: "Visitor counter badge or card (self-hosted tools/counter/ or static count)",
     fields: [
       { key: "title", label: "Heading", type: "text", default: "" },
-      { key: "url", label: "Counter URL", type: "text", default: "",
-        help: "https:// address of tools/counter/server.mjs, e.g. https://counter.example.com/counter.svg; empty = hidden" },
+      { key: "label", label: "Badge label", type: "text", default: "PROFILE VIEWS",
+        help: "Label shown next to the view counter" },
+      { key: "url", label: "Counter server URL", type: "text", default: "",
+        help: "https:// address of tools/counter/server.mjs, e.g. https://counter.example.com/counter.svg; empty = offline badge" },
+      { key: "fallback_count", label: "Fallback / static count", type: "number", min: 0, max: 99999999, step: 1, default: 0,
+        help: "Shown as a local SVG badge when url is empty (0 = hide module until url or count > 0 is set)" },
       { key: "height", label: "Height", type: "number", min: 24, max: 120, step: 2, default: 48 },
     ],
   },
@@ -270,25 +387,44 @@ export const TYPES = {
 // Module ids become folders in assets/gen next to these.
 const RESERVED_IDS = ["tiles", "light"];
 
-const TYPE_ALIASES = { about: "text" };
+const TYPE_ALIASES = { about: "text", views: "counter" };
 export const DEFAULT_LAYOUT = ["banner", "about", "icons", "projects", "releases", "stats"];
+
+// Detect accidental plaintext secrets in settings.txt
+const SECRET_KEY_PATTERN = /(api[_-]?key|client[_-]?secret|token|password|secret)/i;
 
 // ---------------------------------------------------------- settings.txt --
 
 /**
- * "key = value" lines -> {key: value}. Lines starting with "#" are comments
- * (only whole lines, so values like "#ffffff" or "C#" work), "\n" in a value
- * is a line break.
+ * "key = value" lines (or a JSON object from default.config.json) -> {key: value}.
+ * Lines starting with "#" are comments (only whole lines, so values like "#ffffff" or "C#" work),
+ * "\n" in a value is a line break.
  */
 export function parseSettings(text) {
+  if (typeof text === "object" && text !== null) return flattenConfigJson(text);
+  const trimmed = String(text).trim();
+  if (trimmed.startsWith("{")) {
+    try { return flattenConfigJson(JSON.parse(trimmed)); } catch { /* fall through to line parser */ }
+  }
   const settings = {};
-  for (const raw of text.split(/\r?\n/)) {
+  for (const raw of String(text).split(/\r?\n/)) {
     const line = raw.trim();
     if (line.startsWith("#")) continue;
     const eq = line.indexOf("=");
     if (eq > 0) settings[line.slice(0, eq).trim()] = line.slice(eq + 1).trim().replace(/\\n/g, "\n");
   }
   return settings;
+}
+
+function flattenConfigJson(obj) {
+  const flat = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === "layout") flat.layout = Array.isArray(v) ? v.join(", ") : String(v);
+    else if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+      for (const [subK, subV] of Object.entries(v)) flat[`${k}.${subK}`] = String(subV);
+    } else flat[k] = String(v);
+  }
+  return flat;
 }
 
 const comment = (text) => text.split("\n").map((l) => `# ${l}`.trimEnd()).join("\n");
@@ -300,7 +436,9 @@ export function writeSettings(settings, catalog) {
   const out = [comment(
     "Profile settings, read by scripts/build.mjs (and the editor in editor/).\n" +
     'One "key = value" per line, "#" starts a comment, "\\n" is a line break in text.\n' +
-    "After a change on main, the Update profile workflow rebuilds README.md and the images.")];
+    "After a change on main, the Update profile workflow rebuilds README.md and the images.\n" +
+    "SECURITY WARNING: Never put API keys or secrets (e.g. STEAM_API_KEY, MARKET_API_KEY, TWITCH_CLIENT_SECRET)\n" +
+    "into this file! Always store them in GitHub: Settings -> Secrets and variables -> Actions -> New repository secret.")];
 
   out.push("", comment("Modules from top to bottom. Remove an id to hide that module (its options stay below).\n" +
     `Types: ${Object.keys(TYPES).join(", ")}. A new module: add an id here and "<id>.type = <type>".`),
@@ -313,6 +451,9 @@ export function writeSettings(settings, catalog) {
   for (const m of ordered) {
     const hidden = cfg.layout.includes(m) ? "" : " (hidden, not in layout)";
     out.push("", comment(`---- ${m.id}: ${TYPES[m.type].label}${hidden} ----\n${TYPES[m.type].help}`));
+    if (TYPES[m.type].secretWarning) {
+      out.push(comment(`IMPORTANT: ${TYPES[m.type].secretWarning.text}`));
+    }
     // modules without options need the type line, or a hidden one would vanish
     if ((m.id !== m.type && TYPE_ALIASES[m.id] !== m.type) || !TYPES[m.type].fields.length) out.push(`${m.id}.type = ${m.type}`);
     for (const f of TYPES[m.type].fields) {
@@ -328,6 +469,11 @@ export function writeSettings(settings, catalog) {
 
 /** Flat settings -> {theme, layout: [module], modules: [module]}; module = {id, type, opt}. */
 export function resolve(settings) {
+  for (const [k, v] of Object.entries(settings)) {
+    if (SECRET_KEY_PATTERN.test(k) && String(v).trim()) {
+      throw new Error(`Security error: "${k}" looks like a secret or API key. Never store secrets in settings.txt — use GitHub Repository Secrets instead!`);
+    }
+  }
   const theme = {};
   for (const f of THEME_FIELDS) theme[f.key] = convert(f, settings[`theme.${f.key}`], `theme.${f.key}`);
   // The light palette: same theme with the light_* colours.
@@ -381,14 +527,29 @@ function convert(field, value, name) {
     }
     case "color":
       return /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : fail("use a hex colour like #ffffff");
-    case "select":
-      return field.options.includes(value) ? value : fail(`use one of ${field.options.join(", ")}`);
+    case "select": {
+      // Backwards-compatible aliases for dissolve_single ("off" -> "keep", "on" -> "more")
+      const normalized = field.key === "dissolve_single" && (value === "off" || value === "on")
+        ? (value === "on" ? "more" : "keep") : value;
+      return field.options.includes(normalized) ? normalized : fail(`use one of ${field.options.join(", ")}`);
+    }
     case "toggle":
       return value === "on" || value === "off" ? value : fail("use on or off");
     case "name": // a plain file name without extension, e.g. a font in fonts/
       return /^[\w-]+$/.test(value) ? value : fail("use a plain name (letters, digits, - and _)");
     case "file": // a plain file name inside assets/src, no paths
       return value === "none" || MEDIA_FILE.test(value) ? value : fail("use an image or video file name from assets/src, or none");
+    case "portfolio": {
+      // Zero-knowledge validation: reject currency symbols (€, $, £, USD, EUR) and ensure weights are valid percentages
+      if (/[€$£¥]/.test(value)) fail("never store absolute currency amounts (€/$) in settings.txt; only percentages are allowed");
+      for (const [ticker, rest] of splitPairs(value)) {
+        if (!/^[A-Za-z0-9._^-]+$/.test(ticker)) fail(`invalid asset ticker "${ticker}"`);
+        const [wStr] = rest.split("|").map((s) => s.trim());
+        const w = Number(wStr.replace(/%$/, ""));
+        if (!Number.isFinite(w) || w < 0 || w > 100) fail(`weight for "${ticker}" must be a percentage between 0 and 100`);
+      }
+      return value;
+    }
     default:
       return value;
   }
@@ -420,3 +581,18 @@ export const splitPairs = (value) => splitList(value).map((p) => {
   const eq = p.indexOf("=");
   return eq < 0 ? [p.trim(), ""] : [p.slice(0, eq).trim(), p.slice(eq + 1).trim()];
 });
+
+/**
+ * Parse portfolio allocations ("VWCE.DE=60|FTSE ALL-WORLD, AAPL=40|APPLE")
+ * into normalized [{ticker, weight, label}] where weights sum to 100%.
+ */
+export function splitPortfolio(value) {
+  const raw = splitPairs(value).map(([ticker, rest]) => {
+    const [wStr = "0", label = ""] = rest.split("|").map((s) => s.trim());
+    const weight = Math.max(0, Number(wStr.replace(/%$/, "")) || 0);
+    return { ticker: ticker.toUpperCase(), weight, label: (label || ticker).toUpperCase() };
+  }).filter((a) => a.ticker && a.weight > 0);
+  const sum = raw.reduce((s, a) => s + a.weight, 0);
+  if (sum <= 0) return [];
+  return raw.map((a) => ({ ...a, weight: +((a.weight / sum) * 100).toFixed(2) }));
+}

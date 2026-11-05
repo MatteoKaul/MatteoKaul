@@ -37,6 +37,7 @@ const title = (text) => h("h2", {}, dotImg(text, 1.6, "#9a9a9a"));
 // Colour presets for the theme panel (dark palette; light mode has its own colours).
 const PRESETS = {
   Mono: { fg: "#ffffff", muted: "#cfcfcf", faint: "#7a7a7a", dim: "#2c2c2c", bg: "#000000", border: "#2a2a2a" },
+  Purple: { fg: "#b877ff", muted: "#985ce0", faint: "#663c99", dim: "#231436", bg: "#07030d", border: "#321c4d" },
   Amber: { fg: "#ffb000", muted: "#d99a1e", faint: "#8a6420", dim: "#2e2410", bg: "#0a0700", border: "#3a2c10" },
   Phosphor: { fg: "#39ff6a", muted: "#2fcf58", faint: "#1f7a37", dim: "#0f2a16", bg: "#020a04", border: "#123a1c" },
   Ice: { fg: "#9fe8ff", muted: "#7cc4dc", faint: "#4a7686", dim: "#14262e", bg: "#02080b", border: "#1a3440" },
@@ -44,12 +45,55 @@ const PRESETS = {
   Grey: { fg: "#d6d6d6", muted: "#a8a8a8", faint: "#6a6a6a", dim: "#262626", bg: "#121212", border: "#303030" },
 };
 
-const EMPTY_DATA = { followers: 0, commits: 0, pinned: [], calendar: { total: 0, weeks: [] }, repos: [] };
+const FONT_LABELS = {
+  led: "LED Matrix (Classic 5×7 / 7×9)",
+  micro: "Micro Matrix (Compact 3×5 / 5×7)",
+  inter: "Inter (Modern Geometric Sans)",
+  roboto: "Roboto (Neo-Grotesque Sans)",
+  jetbrains: "JetBrains Mono (Developer Monospace)",
+  sans: "System Sans-Serif",
+  theme: "Use Theme Font Family",
+};
+
+const SINGLE_GROUP_LABELS = {
+  keep: "Keep as separate category (Standard)",
+  more: 'Dissolve into "More" (Option 1)',
+  hide: "Hide single-icon categories (Option 2)",
+};
+
+/** Parse hex ("#rrggbb" or "#rgb") or "rgb(r, g, b)" into standard "#rrggbb" hex. */
+function normalizeColorInput(str) {
+  const s = String(str).trim();
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(s)) {
+    return s.length === 4 ? "#" + [...s.slice(1)].map((c) => c + c).join("").toLowerCase() : s.toLowerCase();
+  }
+  const m = s.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i) || s.match(/^(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})$/);
+  if (m) {
+    const hex = [m[1], m[2], m[3]].map((v) => Math.max(0, Math.min(255, Number(v))).toString(16).padStart(2, "0")).join("");
+    return `#${hex}`;
+  }
+  return s;
+}
+
+const SPEED_PRESETS = [
+  ["Slow (0.5x)", 0.5],
+  ["Normal (1.0x)", 1.0],
+  ["Fast (1.5x)", 1.5],
+  ["Turbo (2.5x)", 2.5],
+];
+
+const EMPTY_DATA = {
+  followers: 0, recentFollowers: [], commits: 0, pinned: [],
+  calendar: { total: 0, weeks: [] }, repos: [], contributed: [],
+};
 const state = {
   settings: {},        // flat settings.txt content, the single source of truth
   catalog: null, fonts: {}, images: {}, githubData: EMPTY_DATA,
   selected: "theme",   // "theme" or a module id
   iconFilter: "", iconCategory: "",
+  // Ephemeral in-memory Euro/Dollar input buffer for Zero-Knowledge Portfolio conversion
+  // (NEVER written to state.settings, localStorage, or exported files)
+  ephemeralAmounts: {},
 };
 
 // ------------------------------------------------------------------ load --
@@ -57,10 +101,18 @@ const state = {
 async function load() {
   const get = (path) => fetch(path).then((r) => (r.ok ? r : Promise.reject(new Error(`${path}: ${r.status}`))));
   state.catalog = await get("../scripts/icons.json").then((r) => r.json());
-  state.settings = R.parseSettings(await get("../settings.txt").then((r) => r.text()));
+  const rawSettings = await get("../settings.txt").then((r) => r.text())
+    .catch(() => get("../default.config.json").then((r) => r.text()))
+    .catch(() => get("../default.settings.txt").then((r) => r.text()));
+  state.settings = R.parseSettings(rawSettings);
   const json = (path, fallback) => get(path).then((r) => r.json()).catch(() => fallback);
-  state.githubData = { ...await json("../data/github.json", EMPTY_DATA),
-    feeds: await json("../data/feeds.json", {}), live: await json("../data/live.json", {}) };
+  state.githubData = {
+    ...await json("../data/github.json", EMPTY_DATA),
+    feeds: await json("../data/feeds.json", {}),
+    live: await json("../data/live.json", {}),
+    portfolio: await json("../data/portfolio.json", R.SAMPLE_DATA.portfolio),
+    steam: await json("../data/steam.json", R.SAMPLE_DATA.steam),
+  };
   if (!state.githubData.repos?.length) $("#dataSource").value = "sample"; // nothing fetched yet: show a filled example
   await Promise.all(R.FONTS.map((f) => font(f).catch(() => null)));
   fill($(".brand"), dotImg("PROFILE EDITOR", 2.4));
@@ -93,9 +145,6 @@ function setImage(path, bytes) {
 
 // ---------------------------------------------------------------- helpers --
 
-// Settings are validated by resolve(). While a value is half-typed (e.g. a
-// colour "#ff") the panels keep working with the last valid config and the
-// status line shows what is wrong.
 let lastValid = R.resolve({});
 function cfg() {
   try { lastValid = R.resolve(state.settings); } catch { /* reported by renderPreview */ }
@@ -135,7 +184,7 @@ function renderModules() {
   fill($("#modules"),
     title("Style"),
     h("div", { class: `mod${state.selected === "theme" ? " sel" : ""}`, onclick: () => { state.selected = "theme"; renderModules(); renderOptions(); } },
-      h("span", { class: "name" }, "Theme"), h("span", { class: "type" }, "colours, font")),
+      h("span", { class: "name" }, "Theme"), h("span", { class: "type" }, "colours, speed, font")),
     title("Layout (drag to reorder)"),
     c.layout.map(item),
     hidden.length ? [title("Hidden"), hidden.map(item)] : null,
@@ -174,27 +223,67 @@ function deleteModule(id) {
   renderModules(); renderOptions();
 }
 
+// --------------------------------------------------- secret warning box --
+
+function secretWarningBox(warning) {
+  if (!warning) return null;
+  return h("div", { class: "secret-warning" },
+    h("strong", {}, "⚠️ REPOSITORY SECRET REQUIRED — NEVER STORE API KEYS IN CONFIG!"),
+    h("div", {}, warning.text),
+    h("div", { style: "margin-top:6px" }, "Secret name(s): ",
+      warning.secrets.map((s, i) => [i ? ", " : "", h("code", {}, s)])),
+    h("details", {},
+      h("summary", {}, "Step-by-step: How to add a GitHub Repository Secret"),
+      h("ol", {},
+        h("li", {}, "Open your repository on GitHub and click ", h("code", {}, "Settings"), "."),
+        h("li", {}, "Navigate to ", h("code", {}, "Secrets and variables"), " → ", h("code", {}, "Actions"), "."),
+        h("li", {}, "Click ", h("code", {}, "New repository secret"), "."),
+        h("li", {}, "Enter the secret name (", warning.secrets.map((s, i) => [i ? " or " : "", h("code", {}, s)]), ") and paste your API key."),
+        h("li", {}, "Click ", h("code", {}, "Add secret"), ". Never enter the key in any field below!")
+      )
+    )
+  );
+}
+
 // --------------------------------------------------------------- options --
 
 function renderOptions() {
   const c = cfg();
   if (state.selected === "theme") {
-    fill($("#options"), title("Theme"),
-      h("div", { class: "field" }, h("label", {}, "Presets"),
+    const curFg = state.settings["theme.fg"] ?? c.theme.fg;
+    const fgPick = h("input", { type: "color", value: curFg.slice(0, 7) });
+    const fgHex = h("input", { type: "text", value: curFg, placeholder: "#rrggbb or rgb(r,g,b)", title: "Hex (#rrggbb) or RGB (r, g, b)" });
+    const applyCustomFontColor = (raw) => {
+      const hex = normalizeColorInput(raw);
+      fgHex.value = hex;
+      if (/^#[0-9a-f]{6}$/i.test(hex)) fgPick.value = hex;
+      set("theme.fg", hex);
+    };
+    fgPick.oninput = () => applyCustomFontColor(fgPick.value);
+    fgHex.onchange = () => applyCustomFontColor(fgHex.value);
+
+    fill($("#options"), title("Theme & Typography"),
+      h("div", { class: "field" }, h("label", {}, "Colour Presets (incl. Purple)"),
         h("div", { class: "presets" }, Object.entries(PRESETS).map(([name, colours]) =>
-          h("button", { title: "Sets the colours below", style: `--a:${colours.fg};--b:${colours.bg}`,
+          h("button", { title: "Sets the theme colours below", style: `--a:${colours.fg};--b:${colours.bg}`,
             onclick: () => { for (const [k, v] of Object.entries(colours)) state.settings[`theme.${k}`] = v; changed(); renderOptions(); } },
           h("i", {}), name))),
-        h("div", { class: "help" }, "Starting points; every colour can be changed afterwards.")),
+        h("div", { class: "help" }, "Starting points (Mono, Purple, Amber, Phosphor, Ice, Red, Grey); every colour can be customized below.")),
+      h("div", { class: "field" },
+        h("label", {}, "Custom Font Colour (Free Color Picker + Hex/RGB)"),
+        h("div", { class: "row" }, fgPick, fgHex),
+        h("div", { class: "help" }, "Pick any custom font colour or enter Hex (#b877ff) or RGB (184, 119, 255).")),
       R.THEME_FIELDS.map((f) => field(f, state.settings[`theme.${f.key}`] ?? c.theme[f.key], (v) => set(`theme.${f.key}`, v))));
     return;
   }
   const m = c.modules.find((x) => x.id === state.selected);
   if (!m) { state.selected = "theme"; return renderOptions(); }
+  const typeDef = R.TYPES[m.type];
   fill($("#options"),
-    title(`${m.id} - ${R.TYPES[m.type].label}`),
-    h("p", { class: "help" }, R.TYPES[m.type].help),
-    R.TYPES[m.type].fields.map((f) => field(f, m.opt[f.key], (v) => set(`${m.id}.${f.key}`, v), m)),
+    title(`${m.id} - ${typeDef.label}`),
+    h("p", { class: "help" }, typeDef.help),
+    secretWarningBox(typeDef.secretWarning),
+    typeDef.fields.map((f) => field(f, m.opt[f.key], (v) => set(`${m.id}.${f.key}`, v), m)),
     m.type === "banner" ? imageUpload(m) : null,
     h("button", { class: "danger", onclick: () => confirm(`Delete module "${m.id}" and its options?`) && deleteModule(m.id) }, "Delete module"));
 }
@@ -206,26 +295,41 @@ function field(f, value, onChange, module) {
     case "number": {
       const range = h("input", { type: "range", min: f.min, max: f.max, step: f.step, value });
       const num = h("input", { type: "number", min: f.min, max: f.max, step: f.step, value });
-      range.oninput = () => { num.value = range.value; onChange(range.value); };
-      num.oninput = () => { range.value = num.value; onChange(num.value); };
-      input = h("div", { class: "row" }, range, num);
+      const setVal = (v) => { range.value = v; num.value = v; onChange(v); };
+      range.oninput = () => setVal(range.value);
+      num.oninput = () => setVal(num.value);
+      const presets = f.key === "animation_speed"
+        ? h("div", { class: "presets" }, SPEED_PRESETS.map(([lbl, v]) =>
+          h("button", { type: "button", onclick: () => setVal(v) }, lbl)))
+        : null;
+      input = h("div", {}, h("div", { class: "row" }, range, num), presets);
       break;
     }
     case "color": {
-      const pick = h("input", { type: "color", value });
-      const txt = h("input", { type: "text", value });
+      const pick = h("input", { type: "color", value: String(value).slice(0, 7) });
+      const txt = h("input", { type: "text", value, placeholder: "#rrggbb or rgb(r,g,b)" });
       pick.oninput = () => { txt.value = pick.value; onChange(pick.value); };
-      txt.onchange = () => { pick.value = txt.value; onChange(txt.value); };
+      txt.onchange = () => {
+        const hex = normalizeColorInput(txt.value);
+        txt.value = hex;
+        if (/^#[0-9a-f]{6}$/i.test(hex)) pick.value = hex;
+        onChange(hex);
+      };
       input = h("div", { class: "row" }, pick, txt);
       break;
     }
     case "select":
-      input = h("select", { onchange: (e) => onChange(e.target.value) },
-        f.options.map((o) => h("option", { value: o, selected: o === value }, o)));
+      input = h("select", { onchange: (e) => { onChange(e.target.value); if (module?.type === "icons") renderOptions(); } },
+        f.options.map((o) => h("option", { value: o, selected: o === value },
+          f.key === "dissolve_single" ? (SINGLE_GROUP_LABELS[o] || o) : o)));
       break;
-    case "name": // free name with suggestions (fonts)
-      input = h("div", {}, h("input", { type: "text", value, list: `list-${f.key}`, oninput: (e) => onChange(e.target.value) }),
-        h("datalist", { id: `list-${f.key}` }, (f.suggest || []).map((o) => h("option", { value: o }))));
+    case "name": // font selector with dropdown + custom input support
+      if (f.suggest && f.suggest.length) {
+        input = h("select", { onchange: (e) => onChange(e.target.value) },
+          f.suggest.map((o) => h("option", { value: o, selected: o === value }, FONT_LABELS[o] || o)));
+      } else {
+        input = h("input", { type: "text", value, oninput: (e) => onChange(e.target.value) });
+      }
       break;
     case "toggle": // on/off switch
       input = h("label", { class: "switch" },
@@ -244,10 +348,112 @@ function field(f, value, onChange, module) {
       return peopleEditor(f, value, onChange);
     case "rows":
       return linesEditor(f, value, onChange);
+    case "portfolio":
+      return portfolioEditor(f, value, onChange, module);
     default:
       input = h("input", { type: "text", value, oninput: (e) => onChange(e.target.value) });
   }
   return h("div", { class: "field" }, h("label", {}, f.label), input, f.help ? h("div", { class: "help" }, f.help) : null);
+}
+
+// ------------------------------------ Zero-Knowledge Portfolio Input UI --
+
+/**
+ * Module 2: Zero-Knowledge Portfolio Editor.
+ * Users enter their current position amounts in €/$ in the browser.
+ * The tool immediately converts those amounts into relative percentage weights
+ * client-side. The absolute €/$ numbers live only in memory while typing and
+ * are NEVER stored in settings.txt, localStorage, or pushed to the repository.
+ */
+function portfolioEditor(f, value, onChange, module) {
+  const modKey = module?.id || "portfolio";
+  state.ephemeralAmounts[modKey] ??= {};
+  const amounts = state.ephemeralAmounts[modKey];
+
+  // Parse current percentage allocations from settings
+  const parsed = R.splitPairs(value).map(([ticker, rest]) => {
+    const [wStr = "0", label = ""] = rest.split("|").map((s) => s.trim());
+    const weight = Math.max(0, Number(wStr.replace(/%$/, "")) || 0);
+    return { ticker: ticker.toUpperCase(), weight, label, amount: amounts[ticker.toUpperCase()] ?? "" };
+  });
+  const rows = parsed.length ? parsed : [
+    { ticker: "VWCE.DE", weight: 60, label: "FTSE ALL-WORLD", amount: "" },
+    { ticker: "AAPL", weight: 25, label: "APPLE", amount: "" },
+    { ticker: "BTC-USD", weight: 15, label: "BITCOIN", amount: "" },
+  ];
+
+  const list = h("div", {});
+
+  const saveWeights = () => {
+    // If any row has a positive €/$ amount entered, compute exact percentage weights from the €/$ amounts
+    const hasAmounts = rows.some((r) => Number(r.amount) > 0);
+    if (hasAmounts) {
+      const total = rows.reduce((sum, r) => sum + Math.max(0, Number(r.amount) || 0), 0);
+      if (total > 0) {
+        rows.forEach((r) => {
+          const amt = Math.max(0, Number(r.amount) || 0);
+          r.weight = +((amt / total) * 100).toFixed(2);
+        });
+      }
+    } else {
+      // Normalize manual weights to 100%
+      const sum = rows.reduce((s, r) => s + Math.max(0, Number(r.weight) || 0), 0);
+      if (sum > 0) rows.forEach((r) => { r.weight = +((Math.max(0, Number(r.weight) || 0) / sum) * 100).toFixed(2); });
+    }
+    // Persist ONLY Ticker=Weight%|Label (never r.amount!)
+    const serialized = rows
+      .filter((r) => r.ticker.trim() && r.weight > 0)
+      .map((r) => `${r.ticker.trim().toUpperCase()}=${r.weight}${r.label.trim() ? `|${r.label.trim()}` : ""}`)
+      .join(", ");
+    onChange(serialized);
+  };
+
+  const draw = () => {
+    fill(list, rows.map((row, i) => {
+      const weightDisplay = h("span", { class: "zk-weight", title: "Saved percentage weight" }, `${row.weight.toFixed(1)}%`);
+      const amountInput = h("input", {
+        type: "number", min: 0, step: "any", value: row.amount,
+        placeholder: "Amount (€/$) [Zero-Knowledge]",
+        title: "Enter position value in €/$ — converted immediately to %, never saved!",
+        oninput: (e) => {
+          row.amount = e.target.value;
+          amounts[row.ticker] = row.amount;
+          saveWeights();
+          // Update all weight displays live without losing focus
+          list.querySelectorAll(".zk-weight").forEach((el, idx) => {
+            if (rows[idx]) el.textContent = `${rows[idx].weight.toFixed(1)}%`;
+          });
+        },
+      });
+      return h("div", { class: "entry-row", style: "--cols:4" },
+        h("input", { type: "text", value: row.ticker, placeholder: "Ticker (e.g. VWCE.DE)",
+          oninput: (e) => { row.ticker = e.target.value.toUpperCase(); saveWeights(); } }),
+        h("input", { type: "text", value: row.label, placeholder: "Label (e.g. World ETF)",
+          oninput: (e) => { row.label = e.target.value; saveWeights(); } }),
+        amountInput,
+        weightDisplay,
+        h("button", { title: "Remove asset", onclick: () => { rows.splice(i, 1); saveWeights(); draw(); } }, "×")
+      );
+    }));
+  };
+  draw();
+
+  return h("div", { class: "field" },
+    h("label", {}, f.label),
+    h("div", { class: "zk-box" },
+      h("div", { class: "zk-badge" }, "🛡️ Zero-Knowledge Mode: €/$ values are converted to % in-browser and NEVER saved"),
+      list,
+      h("div", { class: "row", style: "margin-top:8px" },
+        h("button", { type: "button", onclick: () => { rows.push({ ticker: "", label: "", amount: "", weight: 0 }); draw(); } }, "+ Add Asset"),
+        h("button", { type: "button", onclick: () => {
+          rows.forEach((r) => { r.amount = ""; });
+          state.ephemeralAmounts[modKey] = {};
+          draw();
+        } }, "Clear €/$ Inputs (Keep %)")
+      )
+    ),
+    h("div", { class: "help" }, f.help)
+  );
 }
 
 function imageUpload(m) {
@@ -320,7 +526,7 @@ function peopleEditor(f, value, onChange) {
     save, ["", "", "", ""], "+ Entry");
 }
 
-/** rows fields (now, timeline): one entry per line, columns separated by "|". */
+/** rows fields (now, timeline, spoken): one entry per line, columns separated by "|". */
 function linesEditor(f, value, onChange) {
   const rows = R.splitRows(value, f.columns.length);
   const save = () => onChange(rows.filter((r) => r.some(Boolean)).map((r) => r.join(" | ")).join("\n"));
@@ -331,18 +537,28 @@ function linesEditor(f, value, onChange) {
 // Enabled icons are shown per category (the same grouping the README uses).
 // Drag chips to reorder; dropping into another category writes a "move"
 // override. Category arrows write "order", the title box writes "titles".
+// Clicking "2x" on a chip toggles manual double-width for that icon; in
+// granular continuity mode each category also has a column-span selector.
 
 function iconEditor(m) {
   const { catalog } = state, o = m.opt, key = (k) => `${m.id}.${k}`;
   const items = R.splitList(o.items);
   const move = Object.fromEntries(R.splitPairs(o.move));
   const titles = Object.fromEntries(R.splitPairs(o.titles));
-  const groups = R.iconGroups(o, catalog);
+  const doubleItems = new Set(R.splitList(o.double_items || "").map((x) => x.toLowerCase()));
+  const colSpans = Object.fromEntries(R.splitPairs(o.col_spans || ""));
+  const groups = R.iconGroups({ ...o, dissolve_single: "keep" }, catalog);
   const catOf = (k) => move[k] || catalog.icons[k].category;
 
   const saveItems = (list) => set(key("items"), list.join(", "));
   const saveMove = () => set(key("move"), Object.entries(move).map(([k, c]) => `${k}=${c}`).join(", "));
   const saveTitles = () => set(key("titles"), Object.entries(titles).filter(([, t]) => t).map(([c, t]) => `${c}=${t}`).join(", "));
+  const saveDoubles = () => {
+    const list = [...doubleItems];
+    set(key("double_items"), list.join(", "));
+    if (list.length && o.double_mode === "off") set(key("double_mode"), "manual");
+  };
+  const saveSpans = () => set(key("col_spans"), Object.entries(colSpans).filter(([, v]) => Number(v) > 1).map(([c, v]) => `${c}=${v}`).join(", "));
   const refresh = () => { renderOptions(); };
 
   function dropChip(target, cat, beforeKey) {
@@ -350,11 +566,10 @@ function iconEditor(m) {
       e.preventDefault(); target.classList.remove("dragover");
       const k = e.dataTransfer.getData("text/icon");
       if (!k) return;
-      // category override: only kept when it differs from the catalog category
       if (catalog.icons[k].category === cat) delete move[k]; else move[k] = cat;
       const list = items.filter((x) => x !== k);
       let at = beforeKey ? list.indexOf(beforeKey) : -1;
-      if (at < 0) { // after the last icon of that category
+      if (at < 0) {
         const last = list.map(catOf).lastIndexOf(cat);
         at = last < 0 ? list.length : last + 1;
       }
@@ -372,22 +587,35 @@ function iconEditor(m) {
     set(key("order"), order.join(", ")); refresh();
   };
 
-  // Empty categories added with "+ Category" stay as drop targets until used.
   state.extraCats = (state.extraCats || []).filter((c) => !groups.some(([g]) => g === c));
   const shown = [...groups, ...state.extraCats.map((c) => [c, []])];
 
   const boxes = shown.map(([cat, keys]) => {
+    const spanControl = o.continuity === "granular" && o.columns > 1
+      ? h("select", { class: "span-select", title: "Column width span (Granular Mode)",
+        onchange: (e) => { colSpans[cat] = e.target.value; saveSpans(); refresh(); } },
+        Array.from({ length: o.columns }, (_, idx) => {
+          const w = String(idx + 1);
+          return h("option", { value: w, selected: (colSpans[cat] || "1") === w }, `${w} col`);
+        }))
+      : null;
+
     const box = h("div", { class: "cat" },
       h("div", { class: "cat-head" },
         h("button", { class: "icon-btn", title: "Move category up", onclick: () => moveCat(cat, -1) }, "↑"),
         h("button", { class: "icon-btn", title: "Move category down", onclick: () => moveCat(cat, 1) }, "↓"),
         h("input", { type: "text", value: titles[cat] || catalog.categories[cat] || cat.toUpperCase(), title: "Heading shown in the README",
           onchange: (e) => { titles[cat] = e.target.value === catalog.categories[cat] ? "" : e.target.value; saveTitles(); } }),
-        h("small", {}, cat)),
+        spanControl,
+        h("small", {}, keys.length === 1 && o.dissolve_single === "more" ? `${cat} (→ More)` : keys.length === 1 && o.dissolve_single === "hide" ? `${cat} (hidden)` : cat)),
       h("div", { class: "chips" }, keys.length ? keys.map((k) => {
-        const chip = h("span", { class: `chip${move[k] ? " moved" : ""}`, draggable: true,
-          title: move[k] ? `moved here from ${catalog.icons[k].category}` : `drag to reorder or move`},
-          k, h("button", { title: "Remove", onclick: () => { delete move[k]; saveMove(); saveItems(items.filter((x) => x !== k)); refresh(); } }, "×"));
+        const is2x = doubleItems.has(k);
+        const chip = h("span", { class: `chip${move[k] ? " moved" : ""}${is2x ? " double" : ""}`, draggable: true,
+          title: move[k] ? `moved here from ${catalog.icons[k].category}` : `drag to reorder or move` },
+          k,
+          h("button", { class: is2x ? "on" : "", title: "Toggle 2x double width",
+            onclick: () => { if (is2x) doubleItems.delete(k); else doubleItems.add(k); saveDoubles(); refresh(); } }, "2x"),
+          h("button", { title: "Remove", onclick: () => { delete move[k]; doubleItems.delete(k); saveMove(); saveDoubles(); saveItems(items.filter((x) => x !== k)); refresh(); } }, "×"));
         chip.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/icon", k));
         chip.addEventListener("dragover", allowDrop(chip));
         chip.addEventListener("dragleave", () => chip.classList.remove("dragover"));
@@ -423,14 +651,14 @@ function iconEditor(m) {
   }
   drawPicker();
 
-  // All simple options; items / move / order / titles are edited visually below.
-  const style = R.TYPES.icons.fields.filter((f) => !["items", "move", "order", "titles"].includes(f.key))
-    .map((f) => field(f, o[f.key], (v) => set(key(f.key), v)));
+  // All simple options; items / move / order / titles / double_items / col_spans are edited visually below.
+  const style = R.TYPES.icons.fields.filter((f) => !["items", "move", "order", "titles", "double_items", "col_spans"].includes(f.key))
+    .map((f) => field(f, o[f.key], (v) => set(key(f.key), v), m));
 
   return h("div", {},
     style,
     title("Shown icons by category"),
-    h("p", { class: "help" }, "Drag icons to reorder them or into another category. Only categories with at least one icon are shown."),
+    h("p", { class: "help" }, "Drag icons to reorder or move between categories. Click '2x' on any icon chip for manual double-width."),
     boxes, unused.length ? addCat : null,
     title("Catalog"),
     h("div", { class: "picker-tools" }, search, catSelect),
@@ -505,6 +733,10 @@ function setupGithubLink() {
   const repo = location.hostname.endsWith(".github.io") ? location.pathname.split("/")[1] : "MatteoKaul";
   $("#editOnGithub").href = `https://github.com/${owner}/${repo}/edit/main/settings.txt`;
 }
+
+$("#secretsGuideBtn").onclick = () => $("#secretsDialog").showModal();
+$("#closeSecretsBtn").onclick = () => $("#secretsDialog").close();
+$("#secretsDialog").onclick = (e) => { if (e.target === $("#secretsDialog")) $("#secretsDialog").close(); };
 
 $("#download").onclick = () => {
   const a = h("a", { href: URL.createObjectURL(new Blob([settingsText()], { type: "text/plain" })), download: "settings.txt" });
