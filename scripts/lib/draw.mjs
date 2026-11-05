@@ -475,31 +475,95 @@ export function bannerSvg(p, theme, opt, image, invert = false) {
     } else {
       // Animated: every letter is its own group so it can be switched on and off.
       const left = W / 2 - (units * pitch + 2 * pitch * theme.dot) / 2;
-      const letters = [...title].map((ch, i) => ch === " " ? "" :
-        `<g class="c" style="--i:${i}">${shadowOf(ch, left + i * advance * pitch, "start")}` +
+      const chars = [...title];
+      const letters = chars.map((ch, i) => ch === " " ? "" :
+        `<g class="c c${i}" style="--i:${i}">${shadowOf(ch, left + i * advance * pitch, "start")}` +
         p.text(ch, left + i * advance * pitch, 0, { pitch, fill: theme.fg, ...big }).svg + "</g>");
-      const n1 = title.length;
-      if (opt.effect === "type") {
-        const step = +(0.18 / speed).toFixed(3);
-        const dur = n((n1 * 0.18 + 4) / speed);
-        css.push(`.c{animation:type ${dur}s step-end infinite backwards;animation-delay:calc(var(--i) * ${step}s)}`,
-          `@keyframes type{0%{opacity:0}${n((step / dur) * 100)}%{opacity:1}80%{opacity:1}85%,100%{opacity:0}}`);
-      } else if (opt.effect === "flicker") {
-        letters.forEach((l, i) => { if (l && (i * 7 + 3) % 5 === 0) letters[i] = l.replace('class="c"', 'class="c f"'); });
-        if (!letters.some((l) => l.includes('class="c f"'))) letters[letters.findIndex(Boolean)] = letters.find(Boolean).replace('class="c"', 'class="c f"');
-        css.push(`.f{animation:flicker ${n(5 / speed)}s step-end infinite;animation-delay:calc(var(--i) * -1.3s)}`,
-          `@keyframes flicker{0%,40%,44%,47%,78%,81%,100%{opacity:1}42%{opacity:.15}45%{opacity:.4}79%{opacity:.2}}`);
-      } else if (opt.effect === "pulse") {
-        css.push(`.t{animation:pulse ${n(4 / speed)}s ease-in-out infinite}@keyframes pulse{50%{opacity:.68}}`);
-      }
+      const n1 = chars.length;
       let cursorSvg = "";
-      if (cursor) {
-        // An underscore of dots in the bottom row, one character after the title.
-        const cx = left + (title ? n1 * advance * pitch : 0) + pitch * theme.dot;
-        const cy = (p.large.rows - 1) * pitch + pitch * theme.dot;
-        const pts = Array.from({ length: p.large.cols }, (_, c) => [cx + c * pitch, cy]);
-        cursorSvg = `<path class="k" fill="${theme.fg}" d="${dotPath(pts, pitch * theme.dot, theme.shape)}"/>`;
-        css.push(`.k{animation:blink ${n(1.1 / speed)}s step-end infinite}@keyframes blink{50%{opacity:0}}`);
+
+      if (opt.effect === "type" && n1 > 0) {
+        // Terminal typing timeline:
+        // 1. Pre-delay (0..pre): empty line, cursor blinks at slot 0
+        // 2. Typing burst (pre..pre + n1*step): letters appear one by one while cursor steps right (solid)
+        // 3. Hold phase (..tClear): full title visible, cursor blinks at slot n1
+        // 4. Clear & reset (tClear..dur): all letters clear simultaneously, cursor snaps back to slot 0
+        const pre = 0.55 / speed;
+        const step = 0.18 / speed;
+        const hold = 2.8 / speed;
+        const post = 0.65 / speed;
+        const tTyped = pre + n1 * step;
+        const tClear = tTyped + hold;
+        const dur = +(tClear + post).toFixed(2);
+        const pct = (t) => +((t / dur) * 100).toFixed(2);
+        const pClear = pct(tClear);
+
+        chars.forEach((ch, i) => {
+          if (ch === " ") return;
+          const pOn = pct(pre + (i + 1) * step);
+          css.push(`.c${i}{animation:t${i} ${dur}s step-end infinite}`,
+            `@keyframes t${i}{0%{opacity:0}${pOn}%{opacity:1}${pClear}%{opacity:0}}`);
+        });
+
+        if (cursor) {
+          // Draw cursor at slot 0 (left) and step it across each character slot as letters are typed
+          const cx0 = left + pitch * theme.dot;
+          const cy = (p.large.rows - 1) * pitch + pitch * theme.dot;
+          const pts = Array.from({ length: p.large.cols }, (_, c) => [cx0 + c * pitch, cy]);
+          cursorSvg = `<g class="kc"><path class="k" fill="${theme.fg}" d="${dotPath(pts, pitch * theme.dot, theme.shape)}"/></g>`;
+
+          const moveStops = [`0%{transform:translateX(0)}`];
+          for (let i = 0; i < n1; i++) {
+            const pOn = pct(pre + (i + 1) * step);
+            const dx = n((i + 1) * advance * pitch);
+            moveStops.push(`${pOn}%{transform:translateX(${dx}px)}`);
+          }
+          moveStops.push(`${pClear}%{transform:translateX(0)}`);
+
+          // Cursor blink synchronized with typing: solid while moving, blinking during pauses
+          const blinkHalf = 0.5 / speed;
+          const blinkStops = [`0%{opacity:1}`];
+          if (pre > 0.3 / speed) {
+            blinkStops.push(`${pct(pre * 0.5)}%{opacity:0}`, `${pct(pre)}%{opacity:1}`);
+          }
+          let bt = tTyped + blinkHalf, vis = 0;
+          while (bt < tClear - 0.08 / speed) {
+            blinkStops.push(`${pct(bt)}%{opacity:${vis}}`);
+            vis = vis ? 0 : 1;
+            bt += blinkHalf;
+          }
+          blinkStops.push(`${pClear}%{opacity:1}`);
+          if (post > 0.3 / speed) {
+            blinkStops.push(`${pct(tClear + post * 0.55)}%{opacity:0}`);
+          }
+
+          css.push(
+            `.kc{animation:cmove ${dur}s step-end infinite}`,
+            `@keyframes cmove{${moveStops.join("")}}`,
+            `.k{animation:cblink ${dur}s step-end infinite}`,
+            `@keyframes cblink{${blinkStops.join("")}}`
+          );
+        }
+      } else {
+        if (opt.effect === "flicker") {
+          letters.forEach((l, i) => { if (l && (i * 7 + 3) % 5 === 0) letters[i] = l.replace(`class="c c${i}"`, `class="c c${i} f"`); });
+          if (!letters.some((l) => l.includes(" f\""))) {
+            const idx = letters.findIndex(Boolean);
+            if (idx >= 0) letters[idx] = letters[idx].replace(`class="c c${idx}"`, `class="c c${idx} f"`);
+          }
+          css.push(`.f{animation:flicker ${n(5 / speed)}s step-end infinite;animation-delay:calc(var(--i) * -1.3s)}`,
+            `@keyframes flicker{0%,40%,44%,47%,78%,81%,100%{opacity:1}42%{opacity:.15}45%{opacity:.4}79%{opacity:.2}}`);
+        } else if (opt.effect === "pulse") {
+          css.push(`.t{animation:pulse ${n(4 / speed)}s ease-in-out infinite}@keyframes pulse{50%{opacity:.68}}`);
+        }
+        if (cursor) {
+          // Static position: an underscore of dots in the bottom row, one character after the title.
+          const cx = left + (title ? n1 * advance * pitch : 0) + pitch * theme.dot;
+          const cy = (p.large.rows - 1) * pitch + pitch * theme.dot;
+          const pts = Array.from({ length: p.large.cols }, (_, c) => [cx + c * pitch, cy]);
+          cursorSvg = `<path class="k" fill="${theme.fg}" d="${dotPath(pts, pitch * theme.dot, theme.shape)}"/>`;
+          css.push(`.k{animation:blink ${n(1.1 / speed)}s step-end infinite}@keyframes blink{50%{opacity:0}}`);
+        }
       }
       body.push(`<g class="t" transform="translate(0 ${ty})">${letters.join("")}${cursorSvg}</g>`);
     }
