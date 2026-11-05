@@ -154,6 +154,16 @@ const layoutIds = () => cfg().layout.map((m) => m.id);
 function setLayout(ids) { state.settings.layout = ids.join(", "); changed(); }
 function set(key, value) {
   if (value === "" || value == null) delete state.settings[key]; else state.settings[key] = String(value);
+  if (key.endsWith(".font")) {
+    const prefix = key.slice(0, -5);
+    const effectiveFont = value === "theme" ? (state.settings["theme.font"] || "led") : value;
+    if (R.MATRIX_FONTS.includes(effectiveFont)) {
+      state.settings[`${prefix}.style`] = "led";
+    }
+    changed();
+    renderOptions();
+    return;
+  }
   changed();
 }
 let timer;

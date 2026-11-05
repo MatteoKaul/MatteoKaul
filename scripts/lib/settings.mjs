@@ -11,6 +11,7 @@
 
 // Theme options, written as "theme.<key>" in settings.txt.
 export const FONTS = ["led", "micro", "inter", "roboto", "jetbrains", "sans"]; // files in fonts/, offered by the editor
+export const MATRIX_FONTS = ["led", "micro"]; // pure dot-matrix fonts that automatically enforce style = "led"
 
 export const THEME_FIELDS = [
   { key: "mode", label: "Mode", type: "select", options: ["dark", "light", "auto"], default: "dark",
@@ -476,6 +477,7 @@ export function resolve(settings) {
   }
   const theme = {};
   for (const f of THEME_FIELDS) theme[f.key] = convert(f, settings[`theme.${f.key}`], `theme.${f.key}`);
+  if (MATRIX_FONTS.includes(theme.font)) theme.style = "led";
   // The light palette: same theme with the light_* colours.
   const light = { ...theme, fg: theme.light_fg, muted: theme.light_muted, faint: theme.light_faint,
     dim: theme.light_dim, bg: theme.light_bg, border: theme.light_border };
@@ -493,6 +495,10 @@ export function resolve(settings) {
     if (!TYPES[type]) throw new Error(`Module "${id}": unknown type "${type}" (add "${id}.type = <type>")`);
     const opt = {};
     for (const f of TYPES[type].fields) opt[f.key] = convert(f, settings[`${id}.${f.key}`], `${id}.${f.key}`);
+    if (type === "banner") {
+      const effectiveFont = opt.font === "theme" ? theme.font : opt.font;
+      if (MATRIX_FONTS.includes(effectiveFont)) opt.style = "led";
+    }
     return { id, type, opt };
   });
   const byId = Object.fromEntries(modules.map((m) => [m.id, m]));
