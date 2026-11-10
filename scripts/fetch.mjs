@@ -4,7 +4,7 @@
 //   avatars            for "gh:<login>" people images      -> data/avatars/<login>
 //   RSS / Atom feeds   for feed modules (+ thumbnails)      -> data/feeds.json, data/thumbs/
 //
-//   GITHUB_TOKEN=... GH_USER=MatteoKaul node scripts/fetch.mjs
+//   GITHUB_TOKEN=... GH_USER=octocat node scripts/fetch.mjs
 //
 // Run daily by the workflow before build.mjs. The built-in workflow token is
 // enough, only public data is read. The files are committed so builds (and

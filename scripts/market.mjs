@@ -11,11 +11,13 @@
 //     are preserved 100% intact and new daily returns are chain-linked onto the
 //     latest index value (Time-Weighted Return principle).
 //
-// Supported providers:
-//   - yahoo (default, no API key needed; falls back to Stooq if rate-limited)
-//   - stooq (no API key needed)
-//   - tiingo (uses repository secret MARKET_API_KEY)
-//   - alphavantage (uses repository secret MARKET_API_KEY)
+// Providers (portfolio.provider); MARKET_API_KEY is the key of the chosen one:
+//   - yahoo         no key; unofficial endpoint, can be blocked or change
+//   - tiingo        key; US stocks/ETFs only, dividend-adjusted closes
+//   - eodhd         key; also European exchanges (VWCE.DE is asked as VWCE.XETRA)
+//   - alphavantage  key; 25 requests a day on the free plan
+//   - stooq         key (since 2026, from stooq.com via a CAPTCHA form)
+// A ticker that fails keeps its last price, so one bad day never breaks the index.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,68 +41,57 @@ if (!allocations.length) {
 const provider = modules[0]?.opt.provider || "yahoo";
 const existing = existsSync(FILE) ? JSON.parse(readFileSync(FILE, "utf8")) : { history: [], lastPrices: {} };
 const hasHistory = Array.isArray(existing.history) && existing.history.length > 0;
-const UA = { "User-Agent": "Mozilla/5.0 (compatible; HomespaceProfileBot/1.0)" };
+const DAYS = hasHistory ? 14 : 35; // a few days more than needed, so missed runs are filled in
+const UA = { "User-Agent": "Mozilla/5.0 (compatible; profile-matrix)" };
 
 /** Fetch recent daily close prices { "YYYY-MM-DD": closePrice } for `ticker`. */
 async function fetchSeries(ticker, prov) {
+  if (prov !== "yahoo" && !apiKey) throw new Error(`repository secret MARKET_API_KEY is required for provider ${prov}`);
   if (prov === "tiingo") {
-    if (!apiKey) throw new Error("MARKET_API_KEY secret is required for Tiingo provider");
-    const start = shiftDays(hasHistory ? -14 : -35);
-    const clean = ticker.replace(/\.[A-Z]+$/, "");
-    const url = `https://api.tiingo.com/tiingo/daily/${encodeURIComponent(clean)}/prices?startDate=${start}&token=${encodeURIComponent(apiKey)}`;
-    const res = await fetch(url, { headers: { "Content-Type": "application/json", ...UA } });
-    if (!res.ok) throw new Error(`Tiingo ${res.status}`);
-    const rows = await res.json();
+    // Tiingo only knows US listings; dropping ".DE" would silently price another security.
+    if (ticker.includes(".")) throw new Error("Tiingo has US listings only; use provider eodhd or yahoo for exchange suffixes");
+    const url = `https://api.tiingo.com/tiingo/daily/${encodeURIComponent(ticker)}/prices?startDate=${shiftDays(-DAYS)}&token=${encodeURIComponent(apiKey)}`;
+    const rows = await getJson(url, "Tiingo");
     return Object.fromEntries(rows.map((r) => [String(r.date).slice(0, 10), Number(r.adjClose || r.close)]).filter(([, p]) => p > 0));
   }
+  if (prov === "eodhd") {
+    const sym = ticker.includes(".") ? ticker.replace(/\.DE$/i, ".XETRA") : `${ticker}.US`;
+    const url = `https://eodhd.com/api/eod/${encodeURIComponent(sym)}?from=${shiftDays(-DAYS)}&fmt=json&api_token=${encodeURIComponent(apiKey)}`;
+    const rows = await getJson(url, "EODHD");
+    return Object.fromEntries(rows.map((r) => [r.date, Number(r.adjusted_close || r.close)]).filter(([, p]) => p > 0));
+  }
   if (prov === "alphavantage") {
-    if (!apiKey) throw new Error("MARKET_API_KEY secret is required for Alpha Vantage provider");
     const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(ticker)}&outputsize=compact&apikey=${encodeURIComponent(apiKey)}`;
-    const res = await fetch(url, { headers: UA });
-    if (!res.ok) throw new Error(`AlphaVantage ${res.status}`);
-    const data = await res.json();
-    const series = data["Time Series (Daily)"] || {};
-    return Object.fromEntries(Object.entries(series).slice(0, hasHistory ? 14 : 35).map(([d, v]) => [d, Number(v["4. close"])]).filter(([, p]) => p > 0));
+    const data = await getJson(url, "Alpha Vantage");
+    if (!data["Time Series (Daily)"]) throw new Error(`Alpha Vantage: ${data.Note || data.Information || data["Error Message"] || "no data"}`);
+    return Object.fromEntries(Object.entries(data["Time Series (Daily)"]).slice(0, DAYS).map(([d, v]) => [d, Number(v["4. close"])]).filter(([, p]) => p > 0));
   }
   if (prov === "stooq") {
-    return fetchStooq(ticker);
-  }
-  // Default: Yahoo Finance v8 chart API (with Stooq fallback)
-  try {
-    const range = hasHistory ? "10d" : "1mo";
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${range}&interval=1d`;
-    const res = await fetch(url, { headers: UA });
-    if (!res.ok) throw new Error(`Yahoo ${res.status}`);
-    const json = await res.json();
-    const result = json?.chart?.result?.[0];
-    const ts = result?.timestamp || [];
-    const closes = result?.indicators?.quote?.[0]?.close || [];
+    const sym = ticker.includes(".") ? ticker.toLowerCase() : `${ticker.toLowerCase()}.us`;
+    const res = await fetch(`https://stooq.com/q/d/l/?s=${encodeURIComponent(sym)}&i=d&d1=${shiftDays(-DAYS).replace(/-/g, "")}&apikey=${encodeURIComponent(apiKey)}`, { headers: UA });
+    if (!res.ok) throw new Error(`Stooq ${res.status}`);
+    const csv = await res.text();
+    if (!/^Date,/i.test(csv)) throw new Error(`Stooq: ${csv.slice(0, 80).replace(/\s+/g, " ")} (key missing or limit reached?)`);
     const out = {};
-    for (let i = 0; i < ts.length; i++) {
-      const p = Number(closes[i]);
-      if (p > 0) out[new Date(ts[i] * 1000).toISOString().slice(0, 10)] = p;
+    for (const line of csv.trim().split(/\r?\n/).slice(1)) {
+      const [date, , , , close] = line.split(",");
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date) && Number(close) > 0) out[date] = Number(close);
     }
     return out;
-  } catch (err) {
-    console.warn(`market: Yahoo failed for ${ticker} (${err.message}), trying Stooq fallback...`);
-    return fetchStooq(ticker);
   }
+  if (prov !== "yahoo") throw new Error(`unknown provider ${prov}`);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${hasHistory ? "1mo" : "3mo"}&interval=1d`;
+  const result = (await getJson(url, "Yahoo"))?.chart?.result?.[0];
+  const ts = result?.timestamp || [], closes = result?.indicators?.adjclose?.[0]?.adjclose || result?.indicators?.quote?.[0]?.close || [];
+  const out = {};
+  ts.forEach((t, i) => { if (Number(closes[i]) > 0) out[new Date(t * 1000).toISOString().slice(0, 10)] = Number(closes[i]); });
+  return out;
 }
 
-async function fetchStooq(ticker) {
-  const sym = ticker.includes(".") ? ticker.toLowerCase() : `${ticker.toLowerCase()}.us`;
-  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(sym)}&i=d`;
+async function getJson(url, name) {
   const res = await fetch(url, { headers: UA });
-  if (!res.ok) throw new Error(`Stooq ${res.status}`);
-  const csv = await res.text();
-  const lines = csv.trim().split(/\r?\n/).slice(1).slice(-(hasHistory ? 14 : 35));
-  const out = {};
-  for (const line of lines) {
-    const [date, , , , close] = line.split(",");
-    const p = Number(close);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(date) && p > 0) out[date] = p;
-  }
-  return out;
+  if (!res.ok) throw new Error(`${name} ${res.status}`); // the URL is never logged: it can contain the key
+  return res.json();
 }
 
 function shiftDays(delta) {

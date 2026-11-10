@@ -48,7 +48,7 @@ const params = new URLSearchParams({
 });
 
 const url = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?${params}`;
-const res = await fetch(url, { headers: { "User-Agent": "HomespaceProfileBot/1.0" } });
+const res = await fetch(url, { headers: { "User-Agent": "profile-matrix" } });
 if (!res.ok) throw new Error(`Steam Web API: ${res.status} ${await res.text()}`);
 
 const payload = await res.json();

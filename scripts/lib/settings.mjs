@@ -58,13 +58,13 @@ export const TYPES = {
   banner: {
     label: "Banner", help: "Big title on a background image",
     fields: [
-      { key: "title", label: "Title", type: "text", default: "MATREXX",
-        help: "Letters A-Z and spaces; long titles shrink to fit. E.g. MATTEO KAUL, LUMI, LUMIEREZ, LUMI CODE" },
+      { key: "title", label: "Title", type: "text", default: "HELLO WORLD",
+        help: "Letters A-Z and spaces; long titles shrink to fit. E.g. your name or handle" },
       { key: "font", label: "Font family", type: "name", suggest: ["theme", ...FONTS], default: "theme",
         help: "theme = the theme font family, or a font name for the banner only (led, micro, inter, roboto, jetbrains, sans)" },
       { key: "style", label: "Renderer style", type: "select", options: ["theme", "led", "standard"], default: "theme",
         help: "theme = use theme.style | led = dot-matrix LED points | standard = solid vector letters" },
-      { key: "image", label: "Background", type: "file", default: "background.webp",
+      { key: "image", label: "Background", type: "file", default: "none",
         help: "File in assets/src, or none. Images: png, jpg, webp. Animated: gif, animated webp.\n" +
           "Videos (mp4, webm, mov) are turned into an animated webp by the workflow (needs ffmpeg locally)" },
       { key: "color", label: "Background colour", type: "color", default: "#111111", help: "Used when image = none" },
@@ -211,18 +211,18 @@ export const TYPES = {
   },
   portfolio: {
     label: "Portfolio & Asset Tracker",
-    help: "Privacy-first portfolio allocation and chain-linked performance index (never stores absolute currency values; optional MARKET_API_KEY secret for Tiingo/AlphaVantage)",
+    help: "Privacy-first portfolio allocation and chain-linked performance index (never stores absolute currency values; MARKET_API_KEY secret for every provider except yahoo)",
     secretWarning: {
       secrets: ["MARKET_API_KEY"],
-      text: "Only needed with provider = tiingo or alphavantage. Never put the key or absolute amounts (EUR/USD) into settings.txt.",
+      text: "Needed for every provider except yahoo. Never put the key or absolute amounts (EUR/USD) into settings.txt.",
     },
     fields: [
       { key: "title", label: "Heading", type: "text", default: "PORTFOLIO" },
       { key: "allocations", label: "Asset weights (% only, Zero-Knowledge)", type: "portfolio", default: "",
         help: "Ticker=Weight%|Label pairs (sum = 100%). Absolute €/$ values entered in the editor are converted client-side to percentages immediately and are NEVER saved or exported.\n" +
           "E.g. VWCE.DE=60|FTSE ALL-WORLD, AAPL=25|APPLE, BTC-USD=15|BITCOIN" },
-      { key: "provider", label: "Market data provider", type: "select", options: ["yahoo", "tiingo", "alphavantage", "stooq"], default: "yahoo",
-        help: "yahoo / stooq = free without key | tiingo / alphavantage = uses repository secret MARKET_API_KEY" },
+      { key: "provider", label: "Market data provider", type: "select", options: ["yahoo", "tiingo", "eodhd", "alphavantage", "stooq"], default: "yahoo",
+        help: "yahoo = no key, unofficial (can break) | tiingo = US listings only | eodhd = also Xetra & Europe | alphavantage, stooq = small free quota\nAll except yahoo read the repository secret MARKET_API_KEY" },
       { key: "chart", label: "Allocation chart type", type: "select", options: ["donut", "bar", "treemap"], default: "donut",
         help: "donut = segmented ring chart | bar = stacked allocation bar | treemap = proportional 2D tiles" },
       { key: "show_performance", label: "Show performance graph", type: "toggle", default: "on",
@@ -309,7 +309,7 @@ export const TYPES = {
       { key: "title", label: "Heading", type: "text", default: "TIMELINE" },
       { key: "items", label: "Entries", type: "rows", columns: ["When", "Title", "Detail"], default: "",
         help: "One line per entry, newest first, each: WHEN | TITLE | detail.\n" +
-          "E.g. 2024 - NOW | APPLIED COMPUTER SCIENCE | Bachelor, University of ...\\n2023 | ABITUR | ..." },
+          "E.g. 2024 - NOW | COMPUTER SCIENCE | Bachelor, University of ...\\n2023 | ABITUR | ..." },
     ],
   },
   feed: {
@@ -318,7 +318,7 @@ export const TYPES = {
       { key: "title", label: "Heading", type: "text", default: "LATEST VIDEOS" },
       { key: "sources", label: "Feeds", type: "list", default: "",
         help: "Feed URLs, or youtube:<channel id> / youtube:@handle. Several feeds are merged by date.\n" +
-          "E.g. youtube:@Matrexx, https://blog.example.com/rss.xml" },
+          "E.g. youtube:@yourchannel, https://blog.example.com/rss.xml" },
       { key: "limit", label: "Max entries", type: "number", min: 1, max: 12, step: 1, default: 4 },
       { key: "thumbs", label: "Thumbnails", type: "toggle", default: "on", help: "Show the video / post image (in greyscale)" },
       { key: "empty", label: "When empty", type: "select", options: ["hide", "placeholder"], default: "hide" },
@@ -332,7 +332,7 @@ export const TYPES = {
     },
     fields: [
       { key: "title", label: "Heading", type: "text", default: "" },
-      { key: "channel", label: "Channel", type: "name", default: "matrexx_live" },
+      { key: "channel", label: "Channel", type: "name", default: "", help: "Twitch login name (without twitch.tv/)" },
       { key: "offline", label: "When offline", type: "select", options: ["hide", "show"], default: "hide",
         help: "hide = only visible while live | show = an OFFLINE card linking to the channel" },
       { key: "animation_speed", label: "Animation speed", type: "number", min: 0.2, max: 4.0, step: 0.1, default: 1.0,
@@ -401,9 +401,9 @@ export const SECRETS = {
     what: "Steam Web API key", get: "https://steamcommunity.com/dev/apikey" },
   STEAM_ID64: { module: "steam", need: "optional",
     what: "Your SteamID64, only if you want to keep it out of settings.txt (steam.steam_id)", get: "" },
-  MARKET_API_KEY: { module: "portfolio", need: "provider tiingo / alphavantage",
-    what: "API token of the market data provider",
-    get: "https://www.tiingo.com/account/api/token", get2: "https://www.alphavantage.co/support/#api-key" },
+  MARKET_API_KEY: { module: "portfolio", need: "every provider except yahoo",
+    what: "API token of the chosen provider (Tiingo for US listings, EODHD for Xetra/Europe)",
+    get: "https://www.tiingo.com/account/api/token", get2: "https://eodhd.com/register" },
   TWITCH_CLIENT_ID: { module: "twitch", need: "required",
     what: "Client ID of a Twitch application", get: "https://dev.twitch.tv/console/apps" },
   TWITCH_CLIENT_SECRET: { module: "twitch", need: "required",

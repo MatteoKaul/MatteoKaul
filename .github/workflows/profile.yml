@@ -8,8 +8,8 @@
 # Runs daily (stats, activity, market EOD, Steam snapshots and releases change
 # without a commit here), when started manually (Actions tab -> "Update profile"
 # -> "Run workflow") and when settings, scripts, fonts or source images change on main.
-# Needs "Read and write permissions" for workflows (Settings -> Actions ->
-# General) so the job can push.
+# Never runs in MatteoKaul/profile-matrix itself: that repo is the template,
+# its README explains how to use it and must not be replaced by a profile.
 name: Update profile
 
 on:
@@ -21,6 +21,7 @@ on:
     paths:
       - settings.txt
       - default.settings.txt
+      - .github/workflows/profile.yml
       - scripts/**
       - fonts/**
       - assets/src/**
@@ -35,6 +36,7 @@ concurrency:
 
 jobs:
   update:
+    if: github.repository != 'MatteoKaul/profile-matrix'
     runs-on: ubuntu-latest
     steps:
       # Pinned to exact commits (v4.3.1 / v4.4.0), so a changed tag cannot run other code.
@@ -63,8 +65,8 @@ jobs:
           TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
         run: node scripts/live.mjs
 
-      # Optional: EOD market prices for Portfolio module (Yahoo/Stooq free, or
-      # Tiingo/AlphaVantage with repository secret MARKET_API_KEY).
+      # Optional: EOD market prices for the portfolio module (provider yahoo
+      # needs no key; tiingo, eodhd, alphavantage, stooq read MARKET_API_KEY).
       - name: Update portfolio performance index
         env:
           MARKET_API_KEY: ${{ secrets.MARKET_API_KEY }}

@@ -50,7 +50,7 @@ banner.light = keep
 
 # ---- about: Text ----
 about.title = ABOUT
-about.text = Software developer building open-source tools and systems.\nEdit `settings.txt` or open `editor/` to customize this profile.
+about.text = Software developer building open-source tools and systems.\nThis profile was made with [profile-matrix](https://github.com/MatteoKaul/profile-matrix): design yours at https://matteokaul.github.io/profile-matrix-config/ and upload the settings.txt.
 
 # ---- icons: Icons ----
 icons.items = javascript, typescript, python, linux, docker, git
