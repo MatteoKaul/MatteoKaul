@@ -56,7 +56,7 @@ Done (branch `claude/clever-feynman-cj0nr1`, not merged to `main` yet):
 - Module 4 (Extended GitHub & Profile Metrics):
   - Profile Views (`counter` with fallback/static badge support), Spoken Languages (`spoken`), GitHub Followers (`followers`), and Projects I Participate In (`contributed` via GraphQL `repositoriesContributedTo`)
 - Module 5 (CI/CD, Auto-Release & Fork/Template Hygiene):
-  - Neutral fallback configs (`default.config.json` & `default.settings.txt`)
+  - Neutral fallback config `default.settings.txt` (read via `scripts/lib/config.mjs` until a `settings.txt` exists)
   - `.github/workflows/editor-release.yml` with path filter (`editor/**`), Conventional Commits Semantic Versioning, multi-OS builds (macOS ARM64, Windows x64, Linux x64/ARM64), and Fork Guard (`if: github.repository == 'MatteoKaul/MatteoKaul' || github.repository == 'MatteoKaul/Homespace'`)
 - Projects / releases / feed / gists hide themselves until there is data
 - Theme: dark / light / auto (`<picture>`), palette auto from fg/bg +

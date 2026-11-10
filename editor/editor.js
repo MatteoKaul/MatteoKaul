@@ -102,8 +102,7 @@ async function load() {
   const get = (path) => fetch(path).then((r) => (r.ok ? r : Promise.reject(new Error(`${path}: ${r.status}`))));
   state.catalog = await get("../scripts/icons.json").then((r) => r.json());
   const rawSettings = await get("../settings.txt").then((r) => r.text())
-    .catch(() => get("../default.config.json").then((r) => r.text()))
-    .catch(() => get("../default.settings.txt").then((r) => r.text()));
+    .catch(() => get("../default.settings.txt").then((r) => r.text())); // hosted editor / fresh template
   state.settings = R.parseSettings(rawSettings);
   const json = (path, fallback) => get(path).then((r) => r.json()).catch(() => fallback);
   state.githubData = {

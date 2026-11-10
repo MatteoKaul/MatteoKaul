@@ -1,5 +1,5 @@
 // Build README.md and all images in assets/gen/ from settings.txt
-// (falls back to default.settings.txt or default.config.json for forks/templates).
+// (falls back to default.settings.txt until a settings.txt exists).
 //
 //   node scripts/build.mjs                    use data/ (written by fetch.mjs, live.mjs, market.mjs, steam.mjs)
 //   node scripts/build.mjs --sample           use fake data, e.g. to try layouts
@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import {
   SAMPLE_DATA, imageSize, isVideo, neededFonts, neededImages, parseSettings, render, resolve, writeSettings,
 } from "./render.mjs";
+import { readSettingsFile } from "./lib/config.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const path = (p) => join(ROOT, p);
@@ -24,20 +25,11 @@ const read = (p) => readFileSync(path(p), "utf8");
 const readJson = (p, fallback) => (existsSync(path(p)) ? JSON.parse(read(p)) : fallback);
 const args = process.argv.slice(2);
 
-/** Load settings.txt, or fall back to neutral default.config.json / default.settings.txt for forks/templates. */
-function loadConfigText() {
-  const repo = process.env.GITHUB_REPOSITORY || "";
-  const isFork = process.env.GITHUB_EVENT_NAME && repo && !/^MatteoKaul\//i.test(repo) && process.env.USE_DEFAULT_CONFIG === "true";
-  if (!isFork && existsSync(path("settings.txt"))) return read("settings.txt");
-  if (existsSync(path("default.config.json"))) return read("default.config.json");
-  if (existsSync(path("default.settings.txt"))) return read("default.settings.txt");
-  return "";
-}
 
 // What the repo looks like before the first fetch: no data, everything zero.
 const EMPTY_DATA = { followers: 0, recentFollowers: [], commits: 0, pinned: [], calendar: { total: 0, weeks: [] }, repos: [], contributed: [] };
 
-const settings = parseSettings(loadConfigText());
+const settings = parseSettings(readSettingsFile(ROOT).text);
 const cfg = resolve(settings);
 const catalog = JSON.parse(read("scripts/icons.json"));
 const fonts = Object.fromEntries(neededFonts(cfg).filter((f) => existsSync(path(`fonts/${f}.json`)))

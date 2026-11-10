@@ -16,15 +16,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { updateSteamSnapshots } from "./lib/sources.mjs";
-import { parseSettings, resolve } from "./render.mjs";
+import { loadConfig } from "./lib/config.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FILE = join(ROOT, "data/steam.json");
 const { STEAM_API_KEY: apiKey, STEAM_ID64: envSteamId } = process.env;
 
-const settingsFile = existsSync(join(ROOT, "settings.txt")) ? "settings.txt"
-  : existsSync(join(ROOT, "default.config.json")) ? "default.config.json" : "default.settings.txt";
-const cfg = resolve(parseSettings(readFileSync(join(ROOT, settingsFile), "utf8")));
+const cfg = loadConfig(ROOT);
 const modules = cfg.modules.filter((m) => m.type === "steam");
 
 if (!modules.length) {

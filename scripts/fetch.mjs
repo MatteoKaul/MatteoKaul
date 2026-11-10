@@ -17,7 +17,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { feedLabel, feedUrl, gistCard, guestbookEntries, parseFeed, youtubeChannelId } from "./lib/sources.mjs";
-import { avatarLogins, imageSize, parseSettings, resolve, splitList } from "./render.mjs";
+import { loadConfig } from "./lib/config.mjs";
+import { avatarLogins, imageSize, splitList } from "./render.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const path = (p) => join(ROOT, p);
@@ -25,9 +26,7 @@ const { GITHUB_TOKEN, GH_USER } = process.env;
 if (!GITHUB_TOKEN || !GH_USER) throw new Error("set GITHUB_TOKEN and GH_USER");
 // The profile repo (owner/name); the workflow sets GITHUB_REPOSITORY.
 const REPO = process.env.GITHUB_REPOSITORY || `${GH_USER}/${GH_USER}`;
-const settingsFile = existsSync(path("settings.txt")) ? "settings.txt"
-  : existsSync(path("default.config.json")) ? "default.config.json" : "default.settings.txt";
-const cfg = resolve(parseSettings(readFileSync(path(settingsFile), "utf8")));
+const cfg = loadConfig(ROOT);
 const modules = (type) => cfg.modules.filter((m) => m.type === type); // shown and hidden ones
 const readJson = (p, fallback) => (existsSync(path(p)) ? JSON.parse(readFileSync(path(p), "utf8")) : fallback);
 const UA = { "User-Agent": "profile-readme (github.com/" + REPO + ")" };

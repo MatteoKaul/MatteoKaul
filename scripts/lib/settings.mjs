@@ -416,7 +416,7 @@ const SECRET_KEY_PATTERN = /(api[_-]?key|client[_-]?secret|token|password|secret
 // ---------------------------------------------------------- settings.txt --
 
 /**
- * "key = value" lines (or a JSON object from default.config.json) -> {key: value}.
+ * "key = value" lines (or a JSON object, e.g. an imported config.json) -> {key: value}.
  * Lines starting with "#" are comments (only whole lines, so values like "#ffffff" or "C#" work),
  * "\n" in a value is a line break.
  */

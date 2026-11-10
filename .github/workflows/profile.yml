@@ -3,7 +3,7 @@
 #   scripts/live.mjs    Twitch live status -> data/live.json (only with Twitch secrets)
 #   scripts/market.mjs  EOD market prices -> chain-linked index in data/portfolio.json
 #   scripts/steam.mjs   Steam playtime + daily snapshots -> data/steam.json (with STEAM_API_KEY)
-#   scripts/build.mjs   settings.txt (or default.config.json fallback) + data -> README.md and assets/gen/
+#   scripts/build.mjs   settings.txt (or default.settings.txt until one exists) + data -> README.md and assets/gen/
 #
 # Runs daily (stats, activity, market EOD, Steam snapshots and releases change
 # without a commit here), when started manually (Actions tab -> "Update profile"
@@ -20,7 +20,6 @@ on:
     branches: [main]
     paths:
       - settings.txt
-      - default.config.json
       - default.settings.txt
       - scripts/**
       - fonts/**

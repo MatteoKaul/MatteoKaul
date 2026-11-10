@@ -23,7 +23,8 @@ editor/ ── loads the same files + render.mjs in the browser, live preview,
 | Path | What it is |
 | --- | --- |
 | `settings.txt` | Everything you can change: layout, theme, module options. Commented. |
-| `default.config.json`, `default.settings.txt` | Neutral fallback configuration when the repo is forked or used as a template. |
+| `default.settings.txt` | Neutral fallback settings, used until a `settings.txt` exists (fresh template copy, hosted editor). |
+| `scripts/lib/config.mjs` | Picks the settings file for all scripts: `settings.txt`, else `default.settings.txt`. |
 | `README.md` | Generated profile page. |
 | `scripts/render.mjs` | Renderer entry: picks the data for each module and assembles README.md. Pure functions, runs in Node and the browser. |
 | `scripts/lib/settings.mjs` | Option schema (`THEME_FIELDS`, `TYPES`), settings.txt parser/writer, validation. |

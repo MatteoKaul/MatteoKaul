@@ -20,15 +20,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { updatePortfolioHistory } from "./lib/sources.mjs";
-import { parseSettings, resolve, splitPortfolio } from "./render.mjs";
+import { loadConfig } from "./lib/config.mjs";
+import { splitPortfolio } from "./render.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FILE = join(ROOT, "data/portfolio.json");
 const { MARKET_API_KEY: apiKey } = process.env;
 
-const settingsFile = existsSync(join(ROOT, "settings.txt")) ? "settings.txt"
-  : existsSync(join(ROOT, "default.config.json")) ? "default.config.json" : "default.settings.txt";
-const cfg = resolve(parseSettings(readFileSync(join(ROOT, settingsFile), "utf8")));
+const cfg = loadConfig(ROOT);
 const modules = cfg.modules.filter((m) => m.type === "portfolio");
 
 const allocations = modules.flatMap((m) => splitPortfolio(m.opt.allocations));
