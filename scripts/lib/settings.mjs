@@ -214,7 +214,7 @@ export const TYPES = {
     help: "Privacy-first portfolio allocation and chain-linked performance index (never stores absolute currency values; optional MARKET_API_KEY secret for Tiingo/AlphaVantage)",
     secretWarning: {
       secrets: ["MARKET_API_KEY"],
-      text: "Optional: For Tiingo or Alpha Vantage market data, store your API key as a GitHub Repository Secret named MARKET_API_KEY (Yahoo/Stooq works without a key). NEVER paste an API key or absolute currency amounts into settings.txt!",
+      text: "Only needed with provider = tiingo or alphavantage. Never put the key or absolute amounts (EUR/USD) into settings.txt.",
     },
     fields: [
       { key: "title", label: "Heading", type: "text", default: "PORTFOLIO" },
@@ -241,7 +241,7 @@ export const TYPES = {
     help: "Public Steam profile playtime tracker with daily snapshots for exact 7d/30d deltas (requires STEAM_API_KEY secret)",
     secretWarning: {
       secrets: ["STEAM_API_KEY"],
-      text: "Required: Store your Steam Web API Key as a GitHub Repository Secret named STEAM_API_KEY (Settings -> Secrets and variables -> Actions -> New repository secret). Make sure your Steam profile and 'Game details' are set to Public. NEVER put your API key into settings.txt!",
+      text: "Required. Your Steam profile and its \"Game details\" must be set to Public, or Steam returns no games.",
     },
     fields: [
       { key: "title", label: "Heading", type: "text", default: "STEAM PLAYTIME" },
@@ -328,7 +328,7 @@ export const TYPES = {
     label: "Twitch live", help: "Shows when you are live on Twitch (needs TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET secrets)",
     secretWarning: {
       secrets: ["TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET"],
-      text: "Required: Store your Twitch Client ID and Client Secret as GitHub Repository Secrets (TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET). NEVER store API keys or secrets in settings.txt!",
+      text: "Required. Both values come from one Twitch application.",
     },
     fields: [
       { key: "title", label: "Heading", type: "text", default: "" },
@@ -390,6 +390,25 @@ const RESERVED_IDS = ["tiles", "light"];
 
 const TYPE_ALIASES = { about: "text", views: "counter" };
 export const DEFAULT_LAYOUT = ["banner", "about", "icons", "projects", "releases", "stats"];
+
+/**
+ * Every repository secret the workflows read, for the editor's secrets guide.
+ * Secrets live in the user's own profile repo (Settings -> Secrets and variables
+ * -> Actions); neither settings.txt nor the editor ever holds a value.
+ */
+export const SECRETS = {
+  STEAM_API_KEY: { module: "steam", need: "required",
+    what: "Steam Web API key", get: "https://steamcommunity.com/dev/apikey" },
+  STEAM_ID64: { module: "steam", need: "optional",
+    what: "Your SteamID64, only if you want to keep it out of settings.txt (steam.steam_id)", get: "" },
+  MARKET_API_KEY: { module: "portfolio", need: "provider tiingo / alphavantage",
+    what: "API token of the market data provider",
+    get: "https://www.tiingo.com/account/api/token", get2: "https://www.alphavantage.co/support/#api-key" },
+  TWITCH_CLIENT_ID: { module: "twitch", need: "required",
+    what: "Client ID of a Twitch application", get: "https://dev.twitch.tv/console/apps" },
+  TWITCH_CLIENT_SECRET: { module: "twitch", need: "required",
+    what: "Client secret of the same application (\"New Secret\")", get: "https://dev.twitch.tv/console/apps" },
+};
 
 // Detect accidental plaintext secrets in settings.txt
 const SECRET_KEY_PATTERN = /(api[_-]?key|client[_-]?secret|token|password|secret)/i;

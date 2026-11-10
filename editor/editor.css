@@ -108,7 +108,8 @@ main {
   font-size: 12px;
   line-height: 1.5;
 }
-.secret-warning strong { color: #fff; display: block; margin-bottom: 4px; font-size: 13px; }
+.secret-warning > strong { color: #fff; display: block; margin-bottom: 4px; font-size: 13px; }
+.secret-warning strong { color: #fff; }
 .secret-warning code {
   background: rgba(0, 0, 0, .45);
   color: #fff;
@@ -129,6 +130,15 @@ main {
 .modal-box { padding: 18px 20px; }
 .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 14px; }
 .steps { padding-left: 20px; margin: 10px 0 4px; line-height: 1.65; }
+.modal-box { max-height: 85vh; overflow: auto; }
+.guide-lead { margin: 8px 0; color: var(--text); }
+.secret-table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+.secret-table th { text-align: left; color: var(--muted); font-weight: 400; }
+.secret-table th, .secret-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.secret-warning .secret-table td, .secret-warning .secret-table th { border-color: rgba(255, 176, 0, .25); }
+.guide-rules { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; }
+.secret-warning .guide-rules, .secret-warning .guide-lead { color: var(--warn-text); }
+.modal a, .secret-warning a { color: inherit; }
 .steps code { background: var(--field); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--line); }
 
 /* ---- icon editor & double-width badges ---- */

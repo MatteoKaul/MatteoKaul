@@ -233,26 +233,54 @@ function deleteModule(id) {
   renderModules(); renderOptions();
 }
 
-// --------------------------------------------------- secret warning box --
+// ------------------------------------------------------ secrets guide --
 
+// Profiles are created from this template; the guide links it.
+const TEMPLATE_URL = "https://github.com/MatteoKaul/profile-matrix";
+const ext = (href, text) => h("a", { href, target: "_blank", rel: "noopener noreferrer" }, text);
+
+/** Step-by-step guide for the given secret names (all of them in the dialog). */
+function secretsGuide(names) {
+  const rows = names.map((n) => [n, R.SECRETS[n]]);
+  return [
+    h("p", { class: "guide-lead" },
+      "Secrets are stored in your own profile repository (created from ", ext(TEMPLATE_URL, "profile-matrix"),
+      "), not on this website. This editor never asks for a key and never stores one."),
+    h("table", { class: "secret-table" },
+      h("tr", {}, h("th", {}, "Name"), h("th", {}, "Needed"), h("th", {}, "Value / where to get it")),
+      rows.map(([n, s]) => h("tr", {},
+        h("td", {}, h("code", {}, n)),
+        h("td", {}, s.need),
+        h("td", {}, s.what, s.get ? [" - ", ext(s.get, new URL(s.get).hostname)] : null,
+          s.get2 ? [" / ", ext(s.get2, new URL(s.get2).hostname)] : null)))),
+    h("ol", { class: "steps" },
+      h("li", {}, "Open your profile repository on github.com and click ", h("strong", {}, "Settings"),
+        " (top tab; on small screens behind the \u2026 menu). You need admin access to the repository."),
+      h("li", {}, "In the sidebar under ", h("em", {}, "Security"), ": ", h("strong", {}, "Secrets and variables"),
+        " \u2192 ", h("strong", {}, "Actions"), "."),
+      h("li", {}, "On the ", h("strong", {}, "Secrets"), " tab click ", h("strong", {}, "New repository secret"),
+        " (not an environment secret)."),
+      h("li", {}, h("strong", {}, "Name"), ": exactly as in the table, e.g. ", h("code", {}, names[0]), ". ",
+        h("strong", {}, "Secret"), ": paste only the value, without quotes, spaces or a ", h("code", {}, "NAME="), " prefix."),
+      h("li", {}, "Click ", h("strong", {}, "Add secret"),
+        ". GitHub never shows the value again; to change it, open the secret and click ", h("strong", {}, "Update"), "."),
+      h("li", {}, "Test it: ", h("strong", {}, "Actions"), " tab \u2192 ", h("strong", {}, "Update profile"), " \u2192 ",
+        h("strong", {}, "Run workflow"), ". A step that logs \u201cnot set, skipped\u201d means the name does not match.")),
+    h("ul", { class: "guide-rules" },
+      h("li", {}, "Never put a key into settings.txt, an issue, a commit or a screenshot: the repository is public."),
+      h("li", {}, "Secrets are not copied to forks or repositories created from the template; every repository needs its own."),
+      h("li", {}, "Key leaked? Revoke it at the provider and create a new one. Deleting the commit is not enough, the history keeps it.")),
+  ];
+}
+
+/** Always-visible box on modules that read a secret; the steps fold out. */
 function secretWarningBox(warning) {
   if (!warning) return null;
-  return h("div", { class: "secret-warning" },
-    h("strong", {}, "⚠️ REPOSITORY SECRET REQUIRED — NEVER STORE API KEYS IN CONFIG!"),
-    h("div", {}, warning.text),
-    h("div", { style: "margin-top:6px" }, "Secret name(s): ",
-      warning.secrets.map((s, i) => [i ? ", " : "", h("code", {}, s)])),
-    h("details", {},
-      h("summary", {}, "Step-by-step: How to add a GitHub Repository Secret"),
-      h("ol", {},
-        h("li", {}, "Open your repository on GitHub and click ", h("code", {}, "Settings"), "."),
-        h("li", {}, "Navigate to ", h("code", {}, "Secrets and variables"), " → ", h("code", {}, "Actions"), "."),
-        h("li", {}, "Click ", h("code", {}, "New repository secret"), "."),
-        h("li", {}, "Enter the secret name (", warning.secrets.map((s, i) => [i ? " or " : "", h("code", {}, s)]), ") and paste your API key."),
-        h("li", {}, "Click ", h("code", {}, "Add secret"), ". Never enter the key in any field below!")
-      )
-    )
-  );
+  return h("div", { class: "secret-warning", role: "note" },
+    h("strong", {}, "REPOSITORY SECRET - NEVER PUT KEYS IN SETTINGS.TXT"),
+    h("div", {}, "Store ", warning.secrets.map((s, i) => [i ? " and " : "", h("code", {}, s)]),
+      " as repository secret", warning.secrets.length > 1 ? "s" : "", " in your profile repository. ", warning.text),
+    h("details", {}, h("summary", {}, "How to add a repository secret"), secretsGuide(warning.secrets)));
 }
 
 // --------------------------------------------------------------- options --
@@ -744,6 +772,7 @@ function setupGithubLink() {
   $("#editOnGithub").href = `https://github.com/${owner}/${repo}/edit/main/settings.txt`;
 }
 
+fill($("#secretsBody"), secretsGuide(Object.keys(R.SECRETS)));
 $("#secretsGuideBtn").onclick = () => $("#secretsDialog").showModal();
 $("#closeSecretsBtn").onclick = () => $("#secretsDialog").close();
 $("#secretsDialog").onclick = (e) => { if (e.target === $("#secretsDialog")) $("#secretsDialog").close(); };
