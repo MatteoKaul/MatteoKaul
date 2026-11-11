@@ -16,3 +16,9 @@ Building things, learning across the stack.
 <p><img src="assets/gen/icons/row-3.svg" alt="NETWORKING · TERMINALS &amp; SHELLS" width="100%" /></p>
 
 <p><img src="assets/gen/icons/row-4.svg" alt="AI · GAME DEV" width="100%" /></p>
+
+<p><img src="assets/gen/releases/heading.svg" alt="RELEASES" width="100%" /></p>
+
+<p>
+<a href="https://github.com/MatteoKaul/profile-matrix-config/releases/tag/v1.7.0"><img src="assets/gen/releases/profile-matrix-config.svg" alt="profile-matrix-config v1.7.0" width="49%" /></a>
+</p>
