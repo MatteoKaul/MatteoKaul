@@ -36,6 +36,16 @@ theme.faint = #7a7a7a
 theme.dim = #2c2c2c
 # Background of all cards and bars
 theme.bg = #000000
+# solid = cards filled with the card background | none = transparent cards on GitHub's own page background
+# outline = transparent cards with a visible outline (colour below), so modules stay apart on any page colour.
+# With none and outline a banner without image is transparent, too
+# Options: solid | none | outline
+theme.card_fill = solid
+# Only with card fill = outline. auto = the font colour, slightly dimmed (follows it when you change colours);
+# pick a colour to set it yourself, "Auto" switches back
+theme.outline_color = auto
+# Line width in px on screen (card fill = outline); the same on every card, heading and the banner
+theme.outline_width = 0.75
 # Card outline
 theme.border = #2a2a2a
 # manual = use every colour as set | auto = only fg and bg (and light_fg / light_bg) are used, the others are mixed from them by contrast
@@ -62,13 +72,13 @@ theme.text_font = ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
 
 # ---- banner: Banner ----
 # Big title on a background image
-# Letters A-Z and spaces; long titles shrink to fit. E.g. MATTEO KAUL, LUMI, LUMIEREZ, LUMI CODE
+# Letters A-Z and spaces; long titles shrink to fit. E.g. your name or handle
 banner.title = MATREXX
 # theme = the theme font family, or a font name for the banner only (led, micro, inter, roboto, jetbrains, sans)
 banner.font = theme
 # theme = use theme.style | led = dot-matrix LED points | standard = solid vector letters
 # Options: theme | led | standard
-banner.style = theme
+banner.style = led
 # File in assets/src, or none. Images: png, jpg, webp. Animated: gif, animated webp.
 # Videos (mp4, webm, mov) are turned into an animated webp by the workflow (needs ffmpeg locally)
 banner.image = background.webp
@@ -91,7 +101,7 @@ banner.effect = none
 banner.animation_speed = 1
 # A blinking dot cursor after the title
 banner.cursor = off
-# Scrolling LED line at the bottom of the banner, empty = off. E.g. NOW BUILDING: LUMI +++ LIVE ON TWITCH
+# Scrolling LED line at the bottom of the banner, empty = off. E.g. NOW BUILDING: LOREM IPSUM +++ NEW VIDEO OUT
 banner.ticker = 
 # Pixels per second
 banner.ticker_speed = 60
@@ -277,23 +287,25 @@ employer.items =
 # What you are doing right now, one line per topic
 now.title = NOW
 # One line per entry (\n between them in settings.txt), each: LABEL | text.
-# E.g. BUILDING | a homelab dashboard\nLEARNING | Rust\nPLAYING | Factorio
+# E.g. BUILDING | a small dashboard\nLEARNING | Rust\nPLAYING | Factorio
 now.items = 
 # A blinking dot after the last line
 now.cursor = on
+# Cursor blink speed multiplier
+now.animation_speed = 1
 
 # ---- timeline: Timeline (hidden, not in layout) ----
 # Education, jobs and milestones on a dotted line
 timeline.title = TIMELINE
 # One line per entry, newest first, each: WHEN | TITLE | detail.
-# E.g. 2024 - NOW | APPLIED COMPUTER SCIENCE | Bachelor, University of ...\n2023 | ABITUR | ...
+# E.g. 2024 - NOW | COMPUTER SCIENCE | Bachelor, University of ...\n2023 | ABITUR | ...
 timeline.items = 
 
 # ---- feed: Feed (hidden, not in layout) ----
 # Latest videos or posts from RSS / Atom feeds (YouTube, blogs), fetched by the workflow
 feed.title = LATEST VIDEOS
 # Feed URLs, or youtube:<channel id> / youtube:@handle. Several feeds are merged by date.
-# E.g. youtube:@Matrexx, https://blog.example.com/rss.xml
+# E.g. youtube:@yourchannel, https://blog.example.com/rss.xml
 feed.sources = 
 feed.limit = 4
 # Show the video / post image (in greyscale)
@@ -303,11 +315,15 @@ feed.empty = hide
 
 # ---- twitch: Twitch live (hidden, not in layout) ----
 # Shows when you are live on Twitch (needs TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET secrets)
+# IMPORTANT: Required. Both values come from one Twitch application.
 twitch.title = 
+# Twitch login name (without twitch.tv/)
 twitch.channel = matrexx_live
 # hide = only visible while live | show = an OFFLINE card linking to the channel
 # Options: hide | show
 twitch.offline = hide
+# Live indicator pulse speed multiplier
+twitch.animation_speed = 1
 
 # ---- gists: Gists (hidden, not in layout) ----
 # Cards for your pinned or latest public gists (GitHub data)
@@ -338,11 +354,15 @@ guestbook.issue = 0
 guestbook.approval = owner
 guestbook.limit = 5
 
-# ---- counter: Visitor counter (hidden, not in layout) ----
-# Image from your own counter server (tools/counter/), drawn in the same style
+# ---- counter: Profile Views (Counter) (hidden, not in layout) ----
+# Visitor counter badge or card (self-hosted tools/counter/ or static count)
 counter.title = 
-# https:// address of tools/counter/server.mjs, e.g. https://counter.example.com/counter.svg; empty = hidden
+# Label shown next to the view counter
+counter.label = PROFILE VIEWS
+# https:// address of tools/counter/server.mjs, e.g. https://counter.example.com/counter.svg; empty = offline badge
 counter.url = 
+# Shown as a local SVG badge when url is empty (0 = hide module until url or count > 0 is set)
+counter.fallback_count = 0
 counter.height = 48
 
 # ---- business: People (hidden, not in layout) ----
@@ -374,7 +394,7 @@ contributed.title = PROJECTS I PARTICIPATE IN
 # auto = repositories you contributed to on GitHub | list = specific owner/repo entries below
 # Options: auto | list
 contributed.mode = auto
-# Optional owner/repo names, e.g. torvalds/linux, godotengine/godot
+# Optional owner/repo names, e.g. example-org/web-framework, octocat/Hello-World
 contributed.repos = 
 # Repo names or owner/repo to hide from automatic list
 contributed.exclude = 
@@ -402,14 +422,19 @@ spoken.items = GERMAN | NATIVE (C2) | 100\nENGLISH | FLUENT (C1) | 90
 spoken.style = bars
 
 # ---- portfolio: Portfolio & Asset Tracker (hidden, not in layout) ----
-# Privacy-first portfolio allocation and chain-linked performance index (never stores absolute currency values; optional MARKET_API_KEY secret for Tiingo/AlphaVantage)
-# IMPORTANT: Optional: For Tiingo or Alpha Vantage market data, store your API key as a GitHub Repository Secret named MARKET_API_KEY (Yahoo/Stooq works without a key). NEVER paste an API key or absolute currency amounts into settings.txt!
+# Privacy-first portfolio allocation and chain-linked performance index (never stores absolute currency values; MARKET_API_KEY secret for every provider except yahoo)
+# IMPORTANT: Needed for every provider except yahoo. Never put the key or absolute amounts (EUR/USD) into settings.txt.
 portfolio.title = PORTFOLIO
 # Ticker=Weight%|Label pairs (sum = 100%). Absolute €/$ values entered in the editor are converted client-side to percentages immediately and are NEVER saved or exported.
 # E.g. VWCE.DE=60|FTSE ALL-WORLD, AAPL=25|APPLE, BTC-USD=15|BITCOIN
 portfolio.allocations = 
-# yahoo / stooq = free without key | tiingo / alphavantage = uses repository secret MARKET_API_KEY
-# Options: yahoo | tiingo | alphavantage | stooq
+# Weights are rounded to this step before they are saved. Finer steps let others estimate how many shares you hold
+# (weights + public prices on the commit date). 1 = recommended | 0.5 or 0.1 = not recommended
+# Options: 5 | 1 | 0.5 | 0.1
+portfolio.precision = 1
+# yahoo = no key, unofficial (can break) | tiingo = US listings only | eodhd = also Xetra & Europe | alphavantage, stooq = small free quota
+# All except yahoo read the repository secret MARKET_API_KEY
+# Options: yahoo | tiingo | eodhd | alphavantage | stooq
 portfolio.provider = yahoo
 # donut = segmented ring chart | bar = stacked allocation bar | treemap = proportional 2D tiles
 # Options: donut | bar | treemap
@@ -429,7 +454,7 @@ portfolio.empty = hide
 
 # ---- steam: Steam Profile (hidden, not in layout) ----
 # Public Steam profile playtime tracker with daily snapshots for exact 7d/30d deltas (requires STEAM_API_KEY secret)
-# IMPORTANT: Required: Store your Steam Web API Key as a GitHub Repository Secret named STEAM_API_KEY (Settings -> Secrets and variables -> Actions -> New repository secret). Make sure your Steam profile and 'Game details' are set to Public. NEVER put your API key into settings.txt!
+# IMPORTANT: Required. Your Steam profile and its "Game details" must be set to Public, or Steam returns no games.
 steam.title = STEAM PLAYTIME
 # Your 17-digit public SteamID64 (e.g. 76561198000000000), or leave empty and set STEAM_ID64 as a repo secret
 steam.steam_id = 
