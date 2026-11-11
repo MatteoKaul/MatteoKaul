@@ -6,7 +6,7 @@
 
 # Modules from top to bottom. Remove an id to hide that module (its options stay below).
 # Types: banner, text, icons, projects, contributed, releases, stats, followers, spoken, portfolio, steam, activity, socials, people, now, timeline, feed, twitch, gists, code, guestbook, counter, divider. A new module: add an id here and "<id>.type = <type>".
-layout = banner, about, icons, projects, releases, stats
+layout = banner, about, icons, projects, releases
 
 # ---- theme ----
 # dark = dark colours below | light = the light colours | auto = both; GitHub shows the one matching the viewer's theme
@@ -214,7 +214,7 @@ releases.limit = 6
 # Options: hide | placeholder
 releases.empty = hide
 
-# ---- stats: Stats ----
+# ---- stats: Stats (hidden, not in layout) ----
 # Repos, stars, commits, followers and top languages (GitHub data)
 stats.title = STATS
 # How many language bars, 0 = none
@@ -254,77 +254,6 @@ links.tile = below
 # Display height in px of a below-style tile; the other styles scale with it
 links.size = 72
 
-# ---- people: People (hidden, not in layout) ----
-# Cards for people or companies you work with, or your employer
-people.title = WORKING WITH
-# Entries separated by commas, each: Name | Role | URL | Image.
-# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
-# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
-# E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
-people.items = 
-
-# ---- companies: People (hidden, not in layout) ----
-# Cards for people or companies you work with, or your employer
-companies.type = people
-companies.title = COMPANIES
-# Entries separated by commas, each: Name | Role | URL | Image.
-# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
-# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
-# E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
-companies.items = 
-
-# ---- employer: People (hidden, not in layout) ----
-# Cards for people or companies you work with, or your employer
-employer.type = people
-employer.title = EMPLOYER
-# Entries separated by commas, each: Name | Role | URL | Image.
-# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
-# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
-# E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
-employer.items = 
-
-# ---- now: Now (hidden, not in layout) ----
-# What you are doing right now, one line per topic
-now.title = NOW
-# One line per entry (\n between them in settings.txt), each: LABEL | text.
-# E.g. BUILDING | a small dashboard\nLEARNING | Rust\nPLAYING | Factorio
-now.items = 
-# A blinking dot after the last line
-now.cursor = on
-# Cursor blink speed multiplier
-now.animation_speed = 1
-
-# ---- timeline: Timeline (hidden, not in layout) ----
-# Education, jobs and milestones on a dotted line
-timeline.title = TIMELINE
-# One line per entry, newest first, each: WHEN | TITLE | detail.
-# E.g. 2024 - NOW | COMPUTER SCIENCE | Bachelor, University of ...\n2023 | ABITUR | ...
-timeline.items = 
-
-# ---- feed: Feed (hidden, not in layout) ----
-# Latest videos or posts from RSS / Atom feeds (YouTube, blogs), fetched by the workflow
-feed.title = LATEST VIDEOS
-# Feed URLs, or youtube:<channel id> / youtube:@handle. Several feeds are merged by date.
-# E.g. youtube:@yourchannel, https://blog.example.com/rss.xml
-feed.sources = 
-feed.limit = 4
-# Show the video / post image (in greyscale)
-feed.thumbs = on
-# Options: hide | placeholder
-feed.empty = hide
-
-# ---- twitch: Twitch live (hidden, not in layout) ----
-# Shows when you are live on Twitch (needs TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET secrets)
-# IMPORTANT: Required. Both values come from one Twitch application.
-twitch.title = 
-# Twitch login name (without twitch.tv/)
-twitch.channel = matrexx_live
-# hide = only visible while live | show = an OFFLINE card linking to the channel
-# Options: hide | show
-twitch.offline = hide
-# Live indicator pulse speed multiplier
-twitch.animation_speed = 1
-
 # ---- gists: Gists (hidden, not in layout) ----
 # Cards for your pinned or latest public gists (GitHub data)
 gists.title = SNIPPETS
@@ -333,143 +262,3 @@ gists.mode = pinned
 gists.limit = 4
 # Options: hide | placeholder
 gists.empty = hide
-
-# ---- code: Code (hidden, not in layout) ----
-# A short code snippet in a terminal-style card
-code.title = SNIPPET
-# Shown in the card's title bar
-code.file = hello.c
-# Up to 24 lines; lines starting with // or # are drawn dimmer (comments)
-code.code = 
-# Optional https:// link for the card, e.g. the gist
-code.link = 
-
-# ---- guestbook: Guestbook (hidden, not in layout) ----
-# Latest comments on a GitHub issue of this repo, with a link to sign it
-guestbook.title = GUESTBOOK
-# Open an issue in this repo (e.g. "Guestbook") and enter its number; 0 = not set up
-guestbook.issue = 0
-# owner = only comments you reacted to with a thumbs up (moderation) | all = every comment
-# Options: owner | all
-guestbook.approval = owner
-guestbook.limit = 5
-
-# ---- counter: Profile Views (Counter) (hidden, not in layout) ----
-# Visitor counter badge or card (self-hosted tools/counter/ or static count)
-counter.title = 
-# Label shown next to the view counter
-counter.label = PROFILE VIEWS
-# https:// address of tools/counter/server.mjs, e.g. https://counter.example.com/counter.svg; empty = offline badge
-counter.url = 
-# Shown as a local SVG badge when url is empty (0 = hide module until url or count > 0 is set)
-counter.fallback_count = 0
-counter.height = 48
-
-# ---- business: People (hidden, not in layout) ----
-# Cards for people or companies you work with, or your employer
-business.type = people
-business.title = MY BUSINESS
-# Entries separated by commas, each: Name | Role | URL | Image.
-# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
-# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
-# E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
-business.items = 
-
-# ---- support: Socials (hidden, not in layout) ----
-# Link tiles to your profiles
-support.type = socials
-support.title = SUPPORT
-# icon=url pairs, optionally with a label: icon=url|LABEL. The same icon may appear more than once.
-# E.g. youtube=https://www.youtube.com/@name|MAIN, youtube=https://www.youtube.com/@name2|CLIPS, website=https://example.com|BLOG
-support.items = 
-# below = logo with the name underneath | none = logo only | badge = logo left, name right
-# Options: below | none | badge
-support.tile = badge
-# Display height in px of a below-style tile; the other styles scale with it
-support.size = 72
-
-# ---- contributed: Projects I Participate In (hidden, not in layout) ----
-# External repositories you contribute to (GitHub data)
-contributed.title = PROJECTS I PARTICIPATE IN
-# auto = repositories you contributed to on GitHub | list = specific owner/repo entries below
-# Options: auto | list
-contributed.mode = auto
-# Optional owner/repo names, e.g. example-org/web-framework, octocat/Hello-World
-contributed.repos = 
-# Repo names or owner/repo to hide from automatic list
-contributed.exclude = 
-contributed.limit = 6
-# Options: hide | placeholder
-contributed.empty = hide
-
-# ---- followers: GitHub Followers (hidden, not in layout) ----
-# Follower counter and recent followers showcase (GitHub data)
-followers.title = FOLLOWERS
-# card = counter + recent follower cards | compact = full-width summary bar | badges = avatar strip
-# Options: card | compact | badges
-followers.style = card
-# 0 = show only the follower count and stats
-followers.limit = 6
-
-# ---- spoken: Spoken Languages (hidden, not in layout) ----
-# Human languages you speak with optional proficiency level
-spoken.title = SPOKEN LANGUAGES
-# One language per line (\n in settings.txt): LANGUAGE | LEVEL | optional percentage (10-100) for the dot bar.
-# E.g. GERMAN | NATIVE (C2) | 100\nENGLISH | FLUENT (C1) | 90
-spoken.items = GERMAN | NATIVE (C2) | 100\nENGLISH | FLUENT (C1) | 90
-# bars = dot-matrix progress bars in one card | cards = side-by-side cards
-# Options: bars | cards
-spoken.style = bars
-
-# ---- portfolio: Portfolio & Asset Tracker (hidden, not in layout) ----
-# Privacy-first portfolio allocation and chain-linked performance index (never stores absolute currency values; MARKET_API_KEY secret for every provider except yahoo)
-# IMPORTANT: Needed for every provider except yahoo. Never put the key or absolute amounts (EUR/USD) into settings.txt.
-portfolio.title = PORTFOLIO
-# Ticker=Weight%|Label pairs (sum = 100%). Absolute €/$ values entered in the editor are converted client-side to percentages immediately and are NEVER saved or exported.
-# E.g. VWCE.DE=60|FTSE ALL-WORLD, AAPL=25|APPLE, BTC-USD=15|BITCOIN
-portfolio.allocations = 
-# Weights are rounded to this step before they are saved. Finer steps let others estimate how many shares you hold
-# (weights + public prices on the commit date). 1 = recommended | 0.5 or 0.1 = not recommended
-# Options: 5 | 1 | 0.5 | 0.1
-portfolio.precision = 1
-# yahoo = no key, unofficial (can break) | tiingo = US listings only | eodhd = also Xetra & Europe | alphavantage, stooq = small free quota
-# All except yahoo read the repository secret MARKET_API_KEY
-# Options: yahoo | tiingo | eodhd | alphavantage | stooq
-portfolio.provider = yahoo
-# donut = segmented ring chart | bar = stacked allocation bar | treemap = proportional 2D tiles
-# Options: donut | bar | treemap
-portfolio.chart = donut
-# on = show chain-linked index graph (requires at least 7 days of history; locked before 7 days)
-portfolio.show_performance = on
-# ytd = Year-to-Date (default) | 1w = Last Week (7d) | 1m = Last Month (30d) | 1y = Last Year (365d) | custom = Custom days below
-# Options: ytd | 1w | 1m | 1y | custom
-portfolio.period = ytd
-# Used when period = custom (minimum 7 days)
-portfolio.custom_days = 90
-# linear = relative change in % | log = logarithmic index scale
-# Options: linear | log
-portfolio.scale = linear
-# Options: hide | placeholder
-portfolio.empty = hide
-
-# ---- steam: Steam Profile (hidden, not in layout) ----
-# Public Steam profile playtime tracker with daily snapshots for exact 7d/30d deltas (requires STEAM_API_KEY secret)
-# IMPORTANT: Required. Your Steam profile and its "Game details" must be set to Public, or Steam returns no games.
-steam.title = STEAM PLAYTIME
-# Your 17-digit public SteamID64 (e.g. 76561198000000000), or leave empty and set STEAM_ID64 as a repo secret
-steam.steam_id = 
-# all = All-Time | 1m = Last Month (30 days via daily snapshot delta) | 1w = Last Week (7 days via daily snapshot delta)
-# Options: all | 1m | 1w
-steam.period = all
-# total = total playtime | period = playtime in selected timeframe | both = total playtime + timeframe delta
-# Options: total | period | both
-steam.metric = both
-# top5 / top10 = highest playtime in timeframe | custom5 / custom10 = manually picked games below
-# Options: top5 | top10 | custom5 | custom10
-steam.preset = top5
-# Only for custom5 / custom10: comma-separated Steam AppIDs or game names in display order
-steam.custom = 
-# Games to exclude (by AppID or name); next-ranked games automatically move up (e.g. Top 5 excl. Game X and Y)
-steam.exclude = 
-# Options: hide | placeholder
-steam.empty = hide
