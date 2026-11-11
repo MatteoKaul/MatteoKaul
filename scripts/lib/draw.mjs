@@ -132,6 +132,16 @@ export function surface(theme, w, h, { k = 1, withEdge = true, fill = theme.fill
     `fill="none" ${edge(theme, sw)}/>`;
 }
 
+/**
+ * Where the banner photo sits in a W x H banner: {x, y, w, h, overflowX, overflowY}.
+ * Shared with the editor, which turns mouse drags and zoom into position / zoom settings.
+ */
+export function bannerImageBox(opt, imgW, imgH, W = 1600, H = 420) {
+  const z = (opt.zoom || 100) / 100, w = W * z, h = imgH * (W / imgW) * z;
+  const overflowX = Math.max(0, w - W), overflowY = Math.max(0, h - H);
+  return { x: -overflowX * ((opt.position_x ?? 50) / 100) || 0, y: -overflowY * (opt.position / 100) || 0, w, h, overflowX, overflowY };
+}
+
 /** Drawing context bound to a theme and font (supports both "led" and "standard" renderer styles). */
 export function painter(theme, font, styleOverride) {
   const small = font.small, large = font.large || font.small;
@@ -287,13 +297,15 @@ export function categoryRows(p, theme, groups, o) {
   return rows.map((row) => {
     // In unified mode (Mode A), if a row has fewer spans than o.columns (e.g. a wide category), keep uniform column widths unless full-row
     let xCursor = 0;
-    const cells = row.map(({ g: [title, icons], span }) => {
+    const hits = []; // where things are in this image (drawing units): the editor's preview drags and removes icons with it
+    const cells = row.map(({ g: [title, icons, catKey], span }) => {
       const cellW = span * unitColW + (span - 1) * GAP;
       const x0 = xCursor;
       xCursor += cellW + GAP;
 
       const pitch = Math.max(1.8, Math.min(3.0, (cellW - 28) / (p.unitWidth(title) + 2 * theme.dot * p.norm)));
       const label = p.text(p.truncate(title, pitch, cellW - 28), x0 + 14, 0, { pitch, fill: theme.fg });
+      hits.push({ type: "cat", cat: catKey, x: x0, y: 0, w: cellW, h: 0 }, { type: "head", cat: catKey, x: x0, y: 0, w: cellW, h: HEAD });
       const head = `<g transform="translate(${n(x0)} 0)">${surface(theme, cellW, HEAD, { withEdge: theme.outlined })}</g>` +
         `<g transform="translate(0 ${n((HEAD - label.h) / 2)})">${label.svg}</g>`;
 
@@ -301,35 +313,44 @@ export function categoryRows(p, theme, groups, o) {
       const singleW = (o.tile === "none" ? TILE_H : TILE_W) * scale;
       const colsPerLine = Math.max(1, Math.floor((cellW + TILE_GAP) / (singleW + TILE_GAP)));
 
-      // Determine which icons get double width (manual selection + optional auto-fill for odd rows)
-      let x = 0, y = HEAD + 8, lineH = 0, slotsUsedInLine = 0;
+      // Which icons are doubled: the manual picks, plus (auto) the last line filled up. Lines are packed
+      // first (a doubled tile takes 2 slots); the free slots of the last line are then used up by
+      // doubling its single tiles from the end. A line with 1 of 5 slots filled gets 2x on that tile.
+      const bigStyle = o.double_style === "large"; // large = 2x width AND height; wide = 2x width
+      const dbl = icons.map((icon) => useManualDouble && doubleSet.has((icon.key || "").toLowerCase()));
+      if (useAutoDouble && !bigStyle && colsPerLine >= 2) {
+        let line = [], used = 0;
+        icons.forEach((_, i) => {
+          const slots = dbl[i] ? 2 : 1;
+          if (used + slots > colsPerLine && line.length) { line = []; used = 0; }
+          line.push(i); used += slots;
+        });
+        let free = colsPerLine - used;
+        for (let j = line.length - 1; j >= 0 && free > 0; j--) if (!dbl[line[j]]) { dbl[line[j]] = true; free--; }
+      }
+
+      let x = 0, y = HEAD + 8, lineH = 0;
       const tiles = icons.map((icon, idx) => {
         const key = (icon.key || "").toLowerCase();
-        let isDouble = useManualDouble && doubleSet.has(key);
-        const isLast = idx === icons.length - 1;
-        if (!isDouble && useAutoDouble && isLast && colsPerLine >= 2 && (slotsUsedInLine % colsPerLine) === colsPerLine - 2) {
-          isDouble = true;
-        } else if (!isDouble && useAutoDouble && isLast && colsPerLine === 2 && slotsUsedInLine === 0 && icons.length % 2 === 1) {
-          isDouble = true;
-        }
-        const t = tileParts(p, theme, icon, o.tile, isDouble, scale); // drawn scaled: compensate radius and line
-        const w = Math.min(cellW, t.w * scale), h = t.h * scale;
+        const big = dbl[idx] && bigStyle, f = big ? 2 : 1;
+        const t = tileParts(p, theme, icon, o.tile, dbl[idx] && !bigStyle, scale * f); // drawn scaled: compensate radius and line
+        const w = Math.min(cellW, t.w * scale * f), h = t.h * scale * f;
         if (x > 0 && x + w > cellW + 0.5) {
           x = 0;
           y += lineH + TILE_GAP;
           lineH = 0;
-          slotsUsedInLine = 0;
         }
+        hits.push({ type: "icon", key, cat: catKey, x: n(x0 + x), y: n(y), w: n(w), h: n(h) });
         const svg = `<svg x="${n(x0 + x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" viewBox="0 0 ${t.w} ${t.h}">${t.body}</svg>`;
         x += w + TILE_GAP;
         lineH = Math.max(lineH, h);
-        slotsUsedInLine += isDouble ? 2 : 1;
         return svg;
       });
       return { svg: head + tiles.join(""), h: y + lineH };
     });
     const height = Math.ceil(Math.max(...cells.map((c) => c.h)));
-    return { svg: svgDoc(CARD_W, height, cells.map((c) => c.svg).join("")), alt: row.map(({ g: [t] }) => t).join(" · ") };
+    hits.filter((x) => x.type === "cat").forEach((x) => { x.h = height; }); // a category's drop area reaches to the bottom of the row
+    return { svg: svgDoc(CARD_W, height, cells.map((c) => c.svg).join("")), alt: row.map(({ g: [t] }) => t).join(" · "), w: CARD_W, h: height, hits };
   });
 }
 
@@ -465,9 +486,9 @@ export function bannerSvg(p, theme, opt, image, invert = false) {
   const W = 1600, H = 420, defs = [], body = [], css = [];
   const speed = animSpeed(theme, opt);
   if (image) {
-    // Photo scaled to the banner width; `position` picks the visible band.
-    const scale = W / image.width, ph = image.height * scale;
-    const y = -Math.max(0, ph - H) * (opt.position / 100);
+    // Photo scaled to the banner width, then zoomed; position_x / position pick the visible part
+    // (0-100 % of the overflow on each axis). zoom 100 and position_x anything = the plain width fit.
+    const g = bannerImageBox(opt, image.width, image.height, W, H), ph = g.h, y = g.y;
     const b = opt.brightness / 100, contrast = opt.contrast / 100;
     let slope = contrast * b, intercept = b * 0.5 * (1 - contrast);
     if (invert) [slope, intercept] = [-slope, 1 - intercept];
@@ -478,7 +499,7 @@ export function bannerSvg(p, theme, opt, image, invert = false) {
       `<feComponentTransfer>${["R", "G", "B"].map((c) =>
         `<feFunc${c} type="linear" slope="${slope.toFixed(3)}" intercept="${intercept.toFixed(3)}"/>`).join("")}` +
       `</feComponentTransfer>${tint}</filter>`);
-    body.push(`<image href="data:${image.mime};base64,${image.base64}" x="0" y="${n(y)}" width="${W}" height="${n(ph)}" ` +
+    body.push(`<image href="data:${image.mime};base64,${image.base64}" x="${n(g.x)}" y="${n(y)}" width="${n(g.w)}" height="${n(ph)}" ` +
       `preserveAspectRatio="none" filter="url(#photo)"/>`);
   } else if (theme.fill !== "none") body.push(`<rect width="${W}" height="${H}" fill="${opt.color}"/>`);
 
