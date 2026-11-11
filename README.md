@@ -16,7 +16,3 @@ Building things, learning across the stack.
 <p><img src="assets/gen/icons/row-3.svg" alt="NETWORKING · TERMINALS &amp; SHELLS" width="100%" /></p>
 
 <p><img src="assets/gen/icons/row-4.svg" alt="AI · GAME DEV" width="100%" /></p>
-
-<p><img src="assets/gen/stats/heading.svg" alt="STATS" width="100%" /></p>
-
-<p><img src="assets/gen/stats/stats.svg" alt="GitHub stats" width="100%" /></p>

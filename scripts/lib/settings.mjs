@@ -33,10 +33,15 @@ export const THEME_FIELDS = [
   { key: "faint", label: "Faint", type: "color", default: "#7a7a7a", help: "Placeholders and hints" },
   { key: "dim", label: "Dim", type: "color", default: "#2c2c2c", help: "Inactive dots (bars, activity grid)" },
   { key: "bg", label: "Card background", type: "color", default: "#000000", help: "Background of all cards and bars" },
-  { key: "card_fill", label: "Card fill", type: "select", options: ["solid", "none"], default: "solid",
-    help: "solid = cards are filled with the card background | none = transparent cards: text and dots sit directly on\n" +
-      "GitHub's own page background, so the profile looks seamless in every GitHub theme (best with mode = auto).\n" +
-      "A banner without image is transparent then, too" },
+  { key: "card_fill", label: "Card fill", type: "select", options: ["solid", "none", "outline"], default: "solid",
+    help: "solid = cards filled with the card background | none = transparent cards on GitHub's own page background\n" +
+      "outline = transparent cards with a visible outline (colour below), so modules stay apart on any page colour.\n" +
+      "With none and outline a banner without image is transparent, too" },
+  { key: "outline_color", label: "Outline colour", type: "color", auto: true, default: "auto",
+    help: "Only with card fill = outline. auto = the font colour, slightly dimmed (follows it when you change colours);\n" +
+      "pick a colour to set it yourself, \"Auto\" switches back" },
+  { key: "outline_width", label: "Outline thickness", type: "number", min: 0.5, max: 3, step: 0.25, default: 0.75,
+    help: "Line width in px on screen (card fill = outline); the same on every card, heading and the banner" },
   { key: "border", label: "Border", type: "color", default: "#2a2a2a", help: "Card outline" },
   { key: "palette", label: "Palette", type: "select", options: ["manual", "auto"], default: "manual",
     help: "manual = use every colour as set | auto = only fg and bg (and light_fg / light_bg) are used, the others are mixed from them by contrast" },
@@ -72,7 +77,11 @@ export const TYPES = {
         help: "File in assets/src, or none. Images: png, jpg, webp. Animated: gif, animated webp.\n" +
           "Videos (mp4, webm, mov) are turned into an animated webp by the workflow (needs ffmpeg locally)" },
       { key: "color", label: "Background colour", type: "color", default: "#111111", help: "Used when image = none" },
-      { key: "position", label: "Image position", type: "number", min: 0, max: 100, step: 1, default: 30,
+      { key: "zoom", label: "Image zoom (%)", type: "number", min: 100, max: 400, step: 1, default: 100,
+        help: "100 = the photo fills the banner width | more = zoom in. In the editor preview: drag the banner to move, Alt + scroll to zoom" },
+      { key: "position_x", label: "Image position horizontal", type: "number", min: 0, max: 100, step: 1, default: 50,
+        help: "Which part of a zoomed photo is shown, 0 = left, 100 = right" },
+      { key: "position", label: "Image position vertical", type: "number", min: 0, max: 100, step: 1, default: 30,
         help: "Which part of the photo is shown, 0 = top, 100 = bottom" },
       { key: "brightness", label: "Image brightness", type: "number", min: 0, max: 100, step: 1, default: 42,
         help: "Reference: 30 = dark | 42 = default | 70 = bright" },
@@ -127,6 +136,8 @@ export const TYPES = {
         help: "keep = keep as own category | more = Dissolve into \"More\" (merge single-icon groups into a combined 'More' group) | hide = Hide categories containing only 1 icon" },
       { key: "double_mode", label: "Double-width (2x) mode", type: "select", options: ["off", "auto", "manual", "both"], default: "off",
         help: "off = normal width | auto = fill odd grid rows with 2x width | manual = only icons in double_items | both = manual + auto row fill" },
+      { key: "double_style", label: "2x style", type: "select", options: ["wide", "large"], default: "wide",
+        help: "wide = a 2x icon is twice as wide, same height (auto fills rows with it) | large = twice as big in width and height, with a bigger logo and label (auto fill does not apply)" },
       { key: "double_items", label: "Double-width icons", type: "list", default: "",
         help: "Icons rendered at 2x width (in manual/both mode or granular continuity), e.g. docker, linux" },
       { key: "col_spans", label: "Category column spans (granular)", type: "pairs", default: "",
@@ -141,6 +152,11 @@ export const TYPES = {
         help: "icon=category pairs, e.g. wireguard=services" },
       { key: "order", label: "Category order", type: "list", default: "",
         help: "Categories listed first, in this order; the rest follow in catalog order" },
+      { key: "links", label: "Icon links", type: "iconlinks", default: "",
+        help: "icon=https://... pairs: that icon becomes a link (https, http or mailto). An image can hold only one link, so in a\n" +
+          "multi-column layout a category with linked icons is shown as its own full-width block of single tiles" },
+      { key: "hidden", label: "Hidden categories", type: "list", default: "",
+        help: "Categories that are not shown, whatever number of icons they hold (the icons stay in items; the editor's Hide / Show buttons set this)" },
       { key: "titles", label: "Category headings", type: "pairs", default: "",
         help: "category=HEADING pairs to rename categories, e.g. os=SYSTEMS" },
     ],
@@ -495,8 +511,18 @@ export function resolve(settings) {
   const light = { ...theme, fg: theme.light_fg, muted: theme.light_muted, faint: theme.light_faint,
     dim: theme.light_dim, bg: theme.light_bg, border: theme.light_border };
   if (theme.palette === "auto") for (const t of [theme, light]) Object.assign(t, derivePalette(t.fg, t.bg, theme.contrast / 100));
+  // Outline colour: auto follows fg (dimmed) until a colour is set. v1.2.1/1.2.2 files also have
+  // "theme.outline = auto | custom" next to a default outline_color; that choice still counts.
+  const outlineManual = theme.outline_color !== "auto" && settings["theme.outline"] !== "auto";
   // What cards are filled with; bg itself stays a colour (palette mixing, knock-outs like timeline dots).
-  for (const t of [theme, light]) t.fill = theme.card_fill === "none" ? "none" : t.bg;
+  for (const t of [theme, light]) {
+    t.fill = theme.card_fill === "solid" ? t.bg : "none";
+    // edge = the line around cards; outline mode draws it also around headings and the banner
+    t.outlined = theme.card_fill === "outline";
+    t.edge = !t.outlined ? { color: t.border, opacity: 1, width: 1 }
+      : outlineManual ? { color: theme.outline_color, opacity: 1, width: theme.outline_width }
+        : { color: t.fg, opacity: OUTLINE_AUTO_OPACITY, width: theme.outline_width };
+  }
 
   const layoutIds = settings.layout !== undefined ? splitList(settings.layout) : DEFAULT_LAYOUT;
   const ids = [...new Set([...layoutIds, ...Object.keys(settings)
@@ -520,6 +546,15 @@ export function resolve(settings) {
   });
   const byId = Object.fromEntries(modules.map((m) => [m.id, m]));
   return { theme, light, layout: layoutIds.map((id) => byId[id]), modules };
+}
+
+/** Opacity of the automatic outline: the font colour, slightly dimmed. */
+export const OUTLINE_AUTO_OPACITY = 0.6;
+
+/** The automatic outline as a solid colour on a background (for the editor's colour swatch). */
+export function outlineAutoHex(fg, bg) {
+  const a = rgb(fg), b = rgb(bg);
+  return "#" + a.map((v, i) => Math.round(v * OUTLINE_AUTO_OPACITY + b[i] * (1 - OUTLINE_AUTO_OPACITY)).toString(16).padStart(2, "0")).join("");
 }
 
 /** "#rrggbb" / "#rgb" (an alpha part is ignored) -> [r, g, b] */
@@ -549,6 +584,7 @@ function convert(field, value, name) {
       return Math.min(field.max ?? Infinity, Math.max(field.min ?? -Infinity, num));
     }
     case "color":
+      if (field.auto && value === "auto") return "auto"; // follows another colour (outline_color)
       return /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : fail("use a hex colour like #ffffff");
     case "select": {
       // Backwards-compatible aliases for dissolve_single ("off" -> "keep", "on" -> "more")
