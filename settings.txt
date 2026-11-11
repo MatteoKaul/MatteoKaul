@@ -1,0 +1,450 @@
+# Profile settings, read by scripts/build.mjs (and the editor in editor/).
+# One "key = value" per line, "#" starts a comment, "\n" is a line break in text.
+# After a change on main, the Update profile workflow rebuilds README.md and the images.
+# SECURITY WARNING: Never put API keys or secrets (e.g. STEAM_API_KEY, MARKET_API_KEY, TWITCH_CLIENT_SECRET)
+# into this file! Always store them in GitHub: Settings -> Secrets and variables -> Actions -> New repository secret.
+
+# Modules from top to bottom. Remove an id to hide that module (its options stay below).
+# Types: banner, text, icons, projects, contributed, releases, stats, followers, spoken, portfolio, steam, activity, socials, people, now, timeline, feed, twitch, gists, code, guestbook, counter, divider. A new module: add an id here and "<id>.type = <type>".
+layout = banner, about, icons, projects, releases, stats
+
+# ---- theme ----
+# dark = dark colours below | light = the light colours | auto = both; GitHub shows the one matching the viewer's theme
+# Options: dark | light | auto
+theme.mode = dark
+# Font family in fonts/ (fonts/<name>.json): led, micro, inter, roboto, jetbrains (JetBrains Mono), sans (System Sans-Serif)
+theme.font = led
+# led = dot-matrix LED points for any chosen font family | standard = solid vector letterforms
+# Options: led | standard
+theme.style = led
+# circle = LED look, square = pixel look, rounded = in between (used when style = led)
+# Options: circle | square | rounded
+theme.shape = circle
+# Dot radius relative to the dot spacing (0.5 = dots touch)
+theme.dot = 0.39
+# Italic slant, 0 = upright
+theme.slant = 0.22
+# Global animation speed multiplier (1.0 = normal, 0.5 = half speed, 2.0 = double speed)
+theme.animation_speed = 1
+# Main text and logos
+theme.fg = #ffffff
+# Labels and secondary text
+theme.muted = #cfcfcf
+# Placeholders and hints
+theme.faint = #7a7a7a
+# Inactive dots (bars, activity grid)
+theme.dim = #2c2c2c
+# Background of all cards and bars
+theme.bg = #000000
+# Card outline
+theme.border = #2a2a2a
+# manual = use every colour as set | auto = only fg and bg (and light_fg / light_bg) are used, the others are mixed from them by contrast
+# Options: manual | auto
+theme.palette = manual
+# Only with palette = auto: how far labels, hints and borders stand out from the background. Reference: 40 = soft | 70 = default | 100 = hard
+theme.contrast = 70
+# Light mode (mode = light or auto): main text and logos
+theme.light_fg = #111111
+# Light mode: labels and secondary text
+theme.light_muted = #3d3d3d
+# Light mode: placeholders and hints
+theme.light_faint = #8a8a8a
+# Light mode: inactive dots
+theme.light_dim = #dadada
+# Light mode: background of all cards
+theme.light_bg = #ffffff
+# Light mode: card outline
+theme.light_border = #d0d7de
+# Rounding of cards and bars in px
+theme.radius = 12
+# Font for longer text (project descriptions); must be installed on the viewer's system
+theme.text_font = ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
+
+# ---- banner: Banner ----
+# Big title on a background image
+# Letters A-Z and spaces; long titles shrink to fit. E.g. MATTEO KAUL, LUMI, LUMIEREZ, LUMI CODE
+banner.title = MATREXX
+# theme = the theme font family, or a font name for the banner only (led, micro, inter, roboto, jetbrains, sans)
+banner.font = theme
+# theme = use theme.style | led = dot-matrix LED points | standard = solid vector letters
+# Options: theme | led | standard
+banner.style = theme
+# File in assets/src, or none. Images: png, jpg, webp. Animated: gif, animated webp.
+# Videos (mp4, webm, mov) are turned into an animated webp by the workflow (needs ffmpeg locally)
+banner.image = background.webp
+# Used when image = none
+banner.color = #111111
+# Which part of the photo is shown, 0 = top, 100 = bottom
+banner.position = 30
+# Reference: 30 = dark | 42 = default | 70 = bright
+banner.brightness = 42
+# Reference: 90 = flat | 115 = default | 150 = punchy
+banner.contrast = 115
+# Colour of the photo's highlights; #ffffff = black and white, e.g. #ffb000 = amber
+banner.tint = #ffffff
+# Reference: 40 = barely visible | 60 = subtle (default) | 67 = stronger
+banner.shadow = 60
+# none | type = letters appear one by one, then clear | flicker = a few letters flicker like an old LED sign | pulse = slow breathing
+# Options: none | type | flicker | pulse
+banner.effect = none
+# Component animation speed multiplier (multiplies with theme.animation_speed)
+banner.animation_speed = 1
+# A blinking dot cursor after the title
+banner.cursor = off
+# Scrolling LED line at the bottom of the banner, empty = off. E.g. NOW BUILDING: LUMI +++ LIVE ON TWITCH
+banner.ticker = 
+# Pixels per second
+banner.ticker_speed = 60
+# Only for videos: lower = smaller file
+banner.fps = 12
+# Only for videos: seconds used from the start of the clip (it loops)
+banner.duration = 4
+# Only with theme.mode = light or auto. keep = the banner stays dark | adapt = inverted photo, dark letters
+# Options: keep | adapt
+banner.light = keep
+
+# ---- about: Text ----
+# Free text (Markdown)
+# Leave empty for no heading
+about.title = ABOUT
+# Markdown; line breaks are kept
+about.text = Student of **Applied Computer Science**, based in Germany.\nBuilding things, learning across the stack.
+
+# ---- icons: Icons ----
+# Logo tiles, grouped into categories automatically
+# Shown icons, in this order within each category (see scripts/icons.json)
+# Available, by category:
+#   languages: c, cpp, csharp, java, javascript, typescript, python, sql, go, rust, kotlin, swift, dart, php, ruby, lua, r, scala, haskell, elixir, erlang, clojure, fsharp, ocaml, julia, perl, zig, nim, crystal, fortran, solidity, wasm, bash
+#   markup: html, css, markdown, latex, json, yaml, graphql
+#   frameworks: react, vue, angular, svelte, nextjs, nodejs, deno, bun, express, nestjs, django, flask, fastapi, spring, laravel, rails, dotnet, tailwind, bootstrap, qt
+#   data: tensorflow, pytorch, numpy, pandas, jupyter, opencv
+#   build: cmake, make, gradle, maven, bazel, llvm, gnu, npm, pnpm, yarn, vite, webpack
+#   os: macos, windows, linux, cachyos, archlinux, ubuntu, debian, fedora, nixos, manjaro, mint, opensuse, alpine, centos, rocky, kali, popos, endeavouros, gentoo, freebsd, raspberrypi, ios, android
+#   desktop: gnome, kde, hyprland, i3, sway
+#   homelab: truenas, unraid, synology, proxmox, vmware, virtualbox, qemu
+#   devops: docker, podman, kubernetes, portainer, ansible, terraform, vagrant, jenkins, ghactions
+#   git: git, github, gitlab, gitea, forgejo
+#   network: nginx, caddy, traefik, cloudflare, letsencrypt, wireguard, tailscale, openwrt, pfsense, opnsense, pihole, adguard
+#   services: matrix, element, homeassistant, nextcloud, immich, jellyfin, plex, vaultwarden, paperless, syncthing, uptimekuma, homepage, homarr, grafana, prometheus, nodered, mqtt, zigbee2mqtt
+#   databases: mysql, postgresql, sqlite, mariadb, redis, mongodb, influxdb, elastic, kafka, rabbitmq
+#   cloud: gcp, digitalocean, hetzner, vercel, netlify, firebase, supabase
+#   editors: neovim, vim, emacs, vscodium, cursor, sublime, intellij, pycharm, clion, webstorm, eclipse, xcode, androidstudio
+#   terminals: ghostty, alacritty, wezterm, iterm2, warp, zsh, fish, nushell, tmux
+#   security: bitwarden, keepassxc, gpg
+#   ai: claude, anthropic, ollama, huggingface
+#   gamedev: godot, unity, blender
+#   hardware: arduino, esp32, esphome, platformio, nvidia, amd, intel
+#   apps: figma, obs, postman, jira, notion, obsidian, discord, steam
+#   social: twitch, youtube, linkedin, instagram, x, mastodon, bluesky, threads, reddit, tiktok, facebook, xing, telegram, signal, whatsapp, spotify, soundcloud, devto, medium, stackoverflow, leetcode, kaggle, orcid, scholar, itchio, artstation, behance, dribbble, pinterest, email, website, applemusic, ytmusic, bandcamp, deezer, tidal, kick, epicgames, gog, playstation, roblox, gamejolt, newgrounds, modrinth, curseforge, substack, ghost, wordpress, linktree, carrd, replit, gitbook, pypi, npmjs
+#   funding: kofi, patreon, buymeacoffee, githubsponsors, paypal, liberapay, opencollective
+#   business: gumroad, shopify, etsy, company, shop, imprint
+icons.items = c, javascript, typescript, java, python, macos, cachyos, windows, ubuntu, raspberrypi, truenas, docker, wireguard, ghostty, claude, godot
+# sections = a full heading per category | compact = one heading, small category labels
+# Options: sections | compact
+icons.style = sections
+# Only used with style = compact
+icons.title = SKILLS & TOOLS
+# below = logo with the name underneath | none = logo only | badge = logo left, name right
+# Options: below | none | badge
+icons.tile = below
+# Display height in px (columns = 1). Reference: 120 = large | 100 = medium (default) | 80 = small
+icons.size = 100
+# 1 = one category per row with large headings | 2-4 = small headings and tiles, categories in columns
+icons.columns = 2
+# Tile height in px at full README width. Reference: 80 = large | 64 = default | 48 = small
+icons.grid_size = 64
+# unified = Mode A: unifies all columns within a topic automatically | granular = Mode B: allows manual width overrides per category/column or icon
+# Options: unified | granular
+icons.continuity = unified
+# keep = keep as own category | more = Dissolve into "More" (merge single-icon groups into a combined 'More' group) | hide = Hide categories containing only 1 icon
+# Options: keep | more | hide
+icons.dissolve_single = keep
+# off = normal width | auto = fill odd grid rows with 2x width | manual = only icons in double_items | both = manual + auto row fill
+# Options: off | auto | manual | both
+icons.double_mode = off
+# Icons rendered at 2x width (in manual/both mode or granular continuity), e.g. docker, linux
+icons.double_items = 
+# Only in continuity = granular: category=span pairs (1..columns) to manually set category column widths, e.g. languages=2, os=2
+icons.col_spans = 
+# on = only show categories with at least "Minimum icons" icons
+icons.min_toggle = off
+icons.min_icons = 2
+# on = with columns > 1, categories with more than "Full row above" icons get a whole row
+icons.wide_toggle = off
+icons.wide_above = 4
+# icon=category pairs, e.g. wireguard=services
+icons.move = 
+# Categories listed first, in this order; the rest follow in catalog order
+icons.order = 
+# category=HEADING pairs to rename categories, e.g. os=SYSTEMS
+icons.titles = 
+
+# ---- projects: Projects ----
+# Cards for your repositories (GitHub data)
+projects.title = PROJECTS
+# pinned = repos pinned on your profile | recent = last pushed | list = the repos below
+# Options: pinned | recent | list
+projects.mode = pinned
+# Repo names, in this order
+projects.repos = 
+projects.limit = 6
+# hide = section disappears until there is something to show | placeholder = show a NO ... YET card
+# Options: hide | placeholder
+projects.empty = hide
+
+# ---- releases: Releases ----
+# Cards linking to your latest releases (GitHub data)
+releases.title = RELEASES
+# latest = only the newest release across all repos | each = latest release of every repo | list = the repos below
+# Options: latest | each | list
+releases.mode = latest
+releases.repos = 
+releases.limit = 6
+# hide = section disappears until there is something to show | placeholder = show a NO ... YET card
+# Options: hide | placeholder
+releases.empty = hide
+
+# ---- stats: Stats ----
+# Repos, stars, commits, followers and top languages (GitHub data)
+stats.title = STATS
+# How many language bars, 0 = none
+stats.languages = 5
+
+# ---- activity: Activity (hidden, not in layout) ----
+# Contribution calendar of the last year as a dot grid (GitHub data)
+activity.title = ACTIVITY
+activity.weeks = 53
+
+# ---- socials: Socials (hidden, not in layout) ----
+# Link tiles to your profiles
+socials.title = CONTACT
+# icon=url pairs, optionally with a label: icon=url|LABEL. The same icon may appear more than once.
+# E.g. youtube=https://www.youtube.com/@name|MAIN, youtube=https://www.youtube.com/@name2|CLIPS, website=https://example.com|BLOG
+socials.items = github=https://github.com/MatteoKaul, twitch=https://www.twitch.tv/matrexx_live
+# below = logo with the name underneath | none = logo only | badge = logo left, name right
+# Options: below | none | badge
+socials.tile = below
+# Display height in px of a below-style tile; the other styles scale with it
+socials.size = 72
+
+# ---- divider: Divider (hidden, not in layout) ----
+# A dotted line
+divider.type = divider
+
+# ---- links: Socials (hidden, not in layout) ----
+# Link tiles to your profiles
+links.type = socials
+links.title = LINKS
+# icon=url pairs, optionally with a label: icon=url|LABEL. The same icon may appear more than once.
+# E.g. youtube=https://www.youtube.com/@name|MAIN, youtube=https://www.youtube.com/@name2|CLIPS, website=https://example.com|BLOG
+links.items = 
+# below = logo with the name underneath | none = logo only | badge = logo left, name right
+# Options: below | none | badge
+links.tile = below
+# Display height in px of a below-style tile; the other styles scale with it
+links.size = 72
+
+# ---- people: People (hidden, not in layout) ----
+# Cards for people or companies you work with, or your employer
+people.title = WORKING WITH
+# Entries separated by commas, each: Name | Role | URL | Image.
+# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
+# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
+# E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
+people.items = 
+
+# ---- companies: People (hidden, not in layout) ----
+# Cards for people or companies you work with, or your employer
+companies.type = people
+companies.title = COMPANIES
+# Entries separated by commas, each: Name | Role | URL | Image.
+# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
+# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
+# E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
+companies.items = 
+
+# ---- employer: People (hidden, not in layout) ----
+# Cards for people or companies you work with, or your employer
+employer.type = people
+employer.title = EMPLOYER
+# Entries separated by commas, each: Name | Role | URL | Image.
+# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
+# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
+# E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
+employer.items = 
+
+# ---- now: Now (hidden, not in layout) ----
+# What you are doing right now, one line per topic
+now.title = NOW
+# One line per entry (\n between them in settings.txt), each: LABEL | text.
+# E.g. BUILDING | a homelab dashboard\nLEARNING | Rust\nPLAYING | Factorio
+now.items = 
+# A blinking dot after the last line
+now.cursor = on
+
+# ---- timeline: Timeline (hidden, not in layout) ----
+# Education, jobs and milestones on a dotted line
+timeline.title = TIMELINE
+# One line per entry, newest first, each: WHEN | TITLE | detail.
+# E.g. 2024 - NOW | APPLIED COMPUTER SCIENCE | Bachelor, University of ...\n2023 | ABITUR | ...
+timeline.items = 
+
+# ---- feed: Feed (hidden, not in layout) ----
+# Latest videos or posts from RSS / Atom feeds (YouTube, blogs), fetched by the workflow
+feed.title = LATEST VIDEOS
+# Feed URLs, or youtube:<channel id> / youtube:@handle. Several feeds are merged by date.
+# E.g. youtube:@Matrexx, https://blog.example.com/rss.xml
+feed.sources = 
+feed.limit = 4
+# Show the video / post image (in greyscale)
+feed.thumbs = on
+# Options: hide | placeholder
+feed.empty = hide
+
+# ---- twitch: Twitch live (hidden, not in layout) ----
+# Shows when you are live on Twitch (needs TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET secrets)
+twitch.title = 
+twitch.channel = matrexx_live
+# hide = only visible while live | show = an OFFLINE card linking to the channel
+# Options: hide | show
+twitch.offline = hide
+
+# ---- gists: Gists (hidden, not in layout) ----
+# Cards for your pinned or latest public gists (GitHub data)
+gists.title = SNIPPETS
+# Options: pinned | recent
+gists.mode = pinned
+gists.limit = 4
+# Options: hide | placeholder
+gists.empty = hide
+
+# ---- code: Code (hidden, not in layout) ----
+# A short code snippet in a terminal-style card
+code.title = SNIPPET
+# Shown in the card's title bar
+code.file = hello.c
+# Up to 24 lines; lines starting with // or # are drawn dimmer (comments)
+code.code = 
+# Optional https:// link for the card, e.g. the gist
+code.link = 
+
+# ---- guestbook: Guestbook (hidden, not in layout) ----
+# Latest comments on a GitHub issue of this repo, with a link to sign it
+guestbook.title = GUESTBOOK
+# Open an issue in this repo (e.g. "Guestbook") and enter its number; 0 = not set up
+guestbook.issue = 0
+# owner = only comments you reacted to with a thumbs up (moderation) | all = every comment
+# Options: owner | all
+guestbook.approval = owner
+guestbook.limit = 5
+
+# ---- counter: Visitor counter (hidden, not in layout) ----
+# Image from your own counter server (tools/counter/), drawn in the same style
+counter.title = 
+# https:// address of tools/counter/server.mjs, e.g. https://counter.example.com/counter.svg; empty = hidden
+counter.url = 
+counter.height = 48
+
+# ---- business: People (hidden, not in layout) ----
+# Cards for people or companies you work with, or your employer
+business.type = people
+business.title = MY BUSINESS
+# Entries separated by commas, each: Name | Role | URL | Image.
+# Image: gh:<github login> (avatar, fetched by the workflow), an icon key from icons.json,
+# file:<name> (a logo in assets/src, png/jpg/webp), or empty for initials.
+# E.g. Jane Doe | Co-founder | https://github.com/jane | gh:jane, Acme GmbH | Client | https://acme.example | website
+business.items = 
+
+# ---- support: Socials (hidden, not in layout) ----
+# Link tiles to your profiles
+support.type = socials
+support.title = SUPPORT
+# icon=url pairs, optionally with a label: icon=url|LABEL. The same icon may appear more than once.
+# E.g. youtube=https://www.youtube.com/@name|MAIN, youtube=https://www.youtube.com/@name2|CLIPS, website=https://example.com|BLOG
+support.items = 
+# below = logo with the name underneath | none = logo only | badge = logo left, name right
+# Options: below | none | badge
+support.tile = badge
+# Display height in px of a below-style tile; the other styles scale with it
+support.size = 72
+
+# ---- contributed: Projects I Participate In (hidden, not in layout) ----
+# External repositories you contribute to (GitHub data)
+contributed.title = PROJECTS I PARTICIPATE IN
+# auto = repositories you contributed to on GitHub | list = specific owner/repo entries below
+# Options: auto | list
+contributed.mode = auto
+# Optional owner/repo names, e.g. torvalds/linux, godotengine/godot
+contributed.repos = 
+# Repo names or owner/repo to hide from automatic list
+contributed.exclude = 
+contributed.limit = 6
+# Options: hide | placeholder
+contributed.empty = hide
+
+# ---- followers: GitHub Followers (hidden, not in layout) ----
+# Follower counter and recent followers showcase (GitHub data)
+followers.title = FOLLOWERS
+# card = counter + recent follower cards | compact = full-width summary bar | badges = avatar strip
+# Options: card | compact | badges
+followers.style = card
+# 0 = show only the follower count and stats
+followers.limit = 6
+
+# ---- spoken: Spoken Languages (hidden, not in layout) ----
+# Human languages you speak with optional proficiency level
+spoken.title = SPOKEN LANGUAGES
+# One language per line (\n in settings.txt): LANGUAGE | LEVEL | optional percentage (10-100) for the dot bar.
+# E.g. GERMAN | NATIVE (C2) | 100\nENGLISH | FLUENT (C1) | 90
+spoken.items = GERMAN | NATIVE (C2) | 100\nENGLISH | FLUENT (C1) | 90
+# bars = dot-matrix progress bars in one card | cards = side-by-side cards
+# Options: bars | cards
+spoken.style = bars
+
+# ---- portfolio: Portfolio & Asset Tracker (hidden, not in layout) ----
+# Privacy-first portfolio allocation and chain-linked performance index (never stores absolute currency values; optional MARKET_API_KEY secret for Tiingo/AlphaVantage)
+# IMPORTANT: Optional: For Tiingo or Alpha Vantage market data, store your API key as a GitHub Repository Secret named MARKET_API_KEY (Yahoo/Stooq works without a key). NEVER paste an API key or absolute currency amounts into settings.txt!
+portfolio.title = PORTFOLIO
+# Ticker=Weight%|Label pairs (sum = 100%). Absolute €/$ values entered in the editor are converted client-side to percentages immediately and are NEVER saved or exported.
+# E.g. VWCE.DE=60|FTSE ALL-WORLD, AAPL=25|APPLE, BTC-USD=15|BITCOIN
+portfolio.allocations = 
+# yahoo / stooq = free without key | tiingo / alphavantage = uses repository secret MARKET_API_KEY
+# Options: yahoo | tiingo | alphavantage | stooq
+portfolio.provider = yahoo
+# donut = segmented ring chart | bar = stacked allocation bar | treemap = proportional 2D tiles
+# Options: donut | bar | treemap
+portfolio.chart = donut
+# on = show chain-linked index graph (requires at least 7 days of history; locked before 7 days)
+portfolio.show_performance = on
+# ytd = Year-to-Date (default) | 1w = Last Week (7d) | 1m = Last Month (30d) | 1y = Last Year (365d) | custom = Custom days below
+# Options: ytd | 1w | 1m | 1y | custom
+portfolio.period = ytd
+# Used when period = custom (minimum 7 days)
+portfolio.custom_days = 90
+# linear = relative change in % | log = logarithmic index scale
+# Options: linear | log
+portfolio.scale = linear
+# Options: hide | placeholder
+portfolio.empty = hide
+
+# ---- steam: Steam Profile (hidden, not in layout) ----
+# Public Steam profile playtime tracker with daily snapshots for exact 7d/30d deltas (requires STEAM_API_KEY secret)
+# IMPORTANT: Required: Store your Steam Web API Key as a GitHub Repository Secret named STEAM_API_KEY (Settings -> Secrets and variables -> Actions -> New repository secret). Make sure your Steam profile and 'Game details' are set to Public. NEVER put your API key into settings.txt!
+steam.title = STEAM PLAYTIME
+# Your 17-digit public SteamID64 (e.g. 76561198000000000), or leave empty and set STEAM_ID64 as a repo secret
+steam.steam_id = 
+# all = All-Time | 1m = Last Month (30 days via daily snapshot delta) | 1w = Last Week (7 days via daily snapshot delta)
+# Options: all | 1m | 1w
+steam.period = all
+# total = total playtime | period = playtime in selected timeframe | both = total playtime + timeframe delta
+# Options: total | period | both
+steam.metric = both
+# top5 / top10 = highest playtime in timeframe | custom5 / custom10 = manually picked games below
+# Options: top5 | top10 | custom5 | custom10
+steam.preset = top5
+# Only for custom5 / custom10: comma-separated Steam AppIDs or game names in display order
+steam.custom = 
+# Games to exclude (by AppID or name); next-ranked games automatically move up (e.g. Top 5 excl. Game X and Y)
+steam.exclude = 
+# Options: hide | placeholder
+steam.empty = hide
