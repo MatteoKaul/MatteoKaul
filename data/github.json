@@ -1,7 +1,7 @@
 {
  "login": "MatteoKaul",
  "repo": "MatteoKaul/MatteoKaul",
- "fetchedAt": "2026-11-13T11:04:01.434Z",
+ "fetchedAt": "2026-11-14T10:30:32.615Z",
  "followers": 1,
  "recentFollowers": [
   {
@@ -491,7 +491,8 @@
     1,
     3,
     1,
-    1
+    1,
+    0
    ]
   ]
  },
@@ -502,7 +503,7 @@
    "url": "https://github.com/MatteoKaul/MatteoKaul",
    "fork": false,
    "stars": 0,
-   "pushedAt": "2026-11-12T11:19:37Z",
+   "pushedAt": "2026-11-13T11:04:05Z",
    "language": "JavaScript",
    "languages": {
     "JavaScript": 187431
