@@ -1,21 +1,21 @@
 {
  "login": "MatteoKaul",
  "repo": "MatteoKaul/MatteoKaul",
- "fetchedAt": "2026-11-27T12:28:45.938Z",
+ "fetchedAt": "2026-11-28T11:51:42.550Z",
  "followers": 1,
  "recentFollowers": [
   {
    "login": "Lelamar"
   }
  ],
- "commits": 10,
+ "commits": 12,
  "pinned": [],
  "gists": {
   "pinned": [],
   "recent": []
  },
  "calendar": {
-  "total": 1022,
+  "total": 1025,
   "weeks": [
    [
     0,
@@ -491,18 +491,30 @@
     2,
     1,
     0,
-    0
+    1,
+    1
    ]
   ]
  },
  "repos": [
+  {
+   "name": "ai-declaration",
+   "description": null,
+   "url": "https://github.com/MatteoKaul/ai-declaration",
+   "fork": false,
+   "stars": 0,
+   "pushedAt": "2026-11-28T11:28:25Z",
+   "language": "",
+   "languages": {},
+   "release": null
+  },
   {
    "name": "MatteoKaul",
    "description": "repo to customize my profile",
    "url": "https://github.com/MatteoKaul/MatteoKaul",
    "fork": false,
    "stars": 0,
-   "pushedAt": "2026-11-26T12:41:03Z",
+   "pushedAt": "2026-11-27T12:28:47Z",
    "language": "JavaScript",
    "languages": {
     "JavaScript": 187431
